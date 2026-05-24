@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+@layer utilities {
+  .ichimatsu-pattern {
+    background-image: linear-gradient(45deg, rgba(189, 16, 32, 0.05) 25%, transparent 25%), 
+                      linear-gradient(-45deg, rgba(189, 16, 32, 0.05) 25%, transparent 25%), 
+                      linear-gradient(45deg, transparent 75%, rgba(189, 16, 32, 0.05) 75%), 
+                      linear-gradient(-45deg, transparent 75%, rgba(189, 16, 32, 0.05) 75%);
+    background-size: 40px 40px;
+    background-position: 0 0, 0 20px, 20px -20px, -20px 0;
+  }
+
+  .ichimatsu-bg {
+    background-color: #201f1f;
+    background-image: linear-gradient(45deg, #131313 25%, transparent 25%), 
+                      linear-gradient(-45deg, #131313 25%, transparent 25%), 
+                      linear-gradient(45deg, transparent 75%, #131313 75%), 
+                      linear-gradient(-45deg, transparent 75%, #131313 75%);
+    background-size: 40px 40px;
+    background-position: 0 0, 0 20px, 20px -20px, -20px 0;
+  }
+
+  .seigaiha-border {
+    border-bottom: 2px solid;
+    border-image: repeating-linear-gradient(90deg, #bd1020 0, #bd1020 10px, transparent 10px, transparent 20px) 1;
+  }
+
+  .bevel-card {
+    box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.1), 4px 4px 0 rgba(0, 0, 0, 0.5);
+  }
+
+  .aura-glow {
+    filter: drop-shadow(0 0 15px rgba(255, 179, 173, 0.6));
+  }
+
+  .breathing-bar-segment {
+    background: linear-gradient(90deg, #bd1020 0%, #ffb3ad 100%);
+    mask-image: linear-gradient(90deg, black 70%, transparent 70%);
+    mask-size: 10px 100%;
+  }
+
+  .parchment-texture {
+    background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDkhE91YJRPhYFPNdfGVpVsDGZY0aZbB6oERaJGNF4gqWA_E8MPuFvdH1qERq5_wN5jivbrHF6Ah-ycneO2zouyJJYAtmQungGjCCpaz2_sIw4zESnkg42ITvwgfklIK6zZvMJ6po7HJK6b8DAYwAThHQC0TnayJS5DlDk3FK_ULCDnLRHl_ZXf3A_HV-2Xk6b23b_3oEWdNK2TjKGR7EOfkAMDqt9NtCbEwcGubCiAE30soIF2bISsmaShHcGovkLC6CeVw5I_q7pe");
+    background-color: #201f1f;
+  }
+
+  .bevel-edge {
+    border: 2px solid #5c403d;
+    box-shadow: 2px 2px 0px #000, -1px -1px 0px rgba(255, 205, 201, 0.2);
+  }
+
+  .slash-corner {
+    clip-path: polygon(0 0, 95% 0, 100% 15%, 100% 100%, 0 100%);
+  }
+  
+  .slash-corner-md {
+    clip-path: polygon(0 0, 100% 0, 100% 90%, 90% 100%, 0 100%);
+  }
+
+  .bevel-metallic {
+    box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.1), inset -2px -2px 0 rgba(0, 0, 0, 0.5);
+  }
+
+  .bevel-steel {
+    box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.1), inset -2px -2px 0 rgba(0, 0, 0, 0.5);
+  }
+
+  .segmented-progress div {
+    border-right: 2px solid #131313;
+  }
+
+  .sun-gradient {
+    background: linear-gradient(135deg, #bd1020 0%, #131313 100%);
+    box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.2), 0 0 20px rgba(189, 16, 32, 0.4);
+  }
+
+  .asanoha-overlay {
+    mask-image: radial-gradient(circle at center, black 0%, transparent 80%);
+    background-image: repeating-conic-gradient(from 0deg, transparent 0deg 30deg, rgba(189, 16, 32, 0.05) 30deg 60deg);
+    background-size: 20px 20px;
+  }
+  
+  .nichirin-glow {
+    box-shadow: 0 0 15px rgba(189, 16, 32, 0.6);
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Nichirin Character Creator & Missions",
+  "description": "An interactive Demon Slayer inspired character creator, codex archives, reading library, and training mission simulator.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
