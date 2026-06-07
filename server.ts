@@ -1,6 +1,8 @@
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
+import { promises as fs } from "fs";
+import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { GoogleGenAI, Type } from "@google/genai";
@@ -13,7 +15,57 @@ const __dirname = path.dirname(__filename);
 const app = express();
 app.use(express.json());
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
+const DATA_DIR = path.join(process.cwd(), "data");
+const USERS_FILE = path.join(DATA_DIR, "user.json");
+
+type StoredUser = {
+  id: string;
+  name: string;
+  email: string;
+  passwordHash: string;
+  createdAt: string;
+};
+
+async function readUsers(): Promise<StoredUser[]> {
+  try {
+    const raw = await fs.readFile(USERS_FILE, "utf8");
+    return JSON.parse(raw);
+  } catch (error: any) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+async function writeUsers(users: StoredUser[]) {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  await fs.writeFile(USERS_FILE, JSON.stringify(users, null, 2), "utf8");
+}
+
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+function hashPassword(password: string, salt = crypto.randomBytes(16).toString("hex")) {
+  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password: string, storedHash: string) {
+  const [salt, hash] = storedHash.split(":");
+  if (!salt || !hash) return false;
+  const candidate = hashPassword(password, salt).split(":")[1];
+  return crypto.timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(candidate, "hex"));
+}
+
+function publicUser(user: StoredUser) {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    createdAt: user.createdAt
+  };
+}
 
 // Lazy initialize client to prevent startup failure if key is missing
 let aiClient: GoogleGenAI | null = null;
@@ -35,6 +87,63 @@ function getAiClient() {
   }
   return aiClient;
 }
+
+// API Route 0: Local account auth
+app.post("/api/auth/signup", async (req, res) => {
+  try {
+    const name = String(req.body.name || "").trim();
+    const email = normalizeEmail(String(req.body.email || ""));
+    const password = String(req.body.password || "");
+
+    if (name.length < 2) {
+      return res.status(400).json({ error: "Enter a display name with at least 2 characters." });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "Enter a valid email address." });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: "Password must be at least 6 characters." });
+    }
+
+    const users = await readUsers();
+    if (users.some((user) => user.email === email)) {
+      return res.status(409).json({ error: "An account with this email already exists." });
+    }
+
+    const newUser: StoredUser = {
+      id: crypto.randomUUID(),
+      name,
+      email,
+      passwordHash: hashPassword(password),
+      createdAt: new Date().toISOString()
+    };
+
+    users.push(newUser);
+    await writeUsers(users);
+    res.status(201).json({ user: publicUser(newUser) });
+  } catch (error: any) {
+    console.error("Error signing up:", error);
+    res.status(500).json({ error: "Could not create account." });
+  }
+});
+
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const email = normalizeEmail(String(req.body.email || ""));
+    const password = String(req.body.password || "");
+    const users = await readUsers();
+    const user = users.find((candidate) => candidate.email === email);
+
+    if (!user || !verifyPassword(password, user.passwordHash)) {
+      return res.status(401).json({ error: "Email or password is incorrect." });
+    }
+
+    res.json({ user: publicUser(user) });
+  } catch (error: any) {
+    console.error("Error logging in:", error);
+    res.status(500).json({ error: "Could not log in." });
+  }
+});
 
 // Ensure server handles API routes BEFORE mounting Vite middleware
 // API Route 1: Generate Character

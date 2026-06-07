@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import {
   Compass,
   Flame,
@@ -20,13 +20,113 @@ import {
   PenTool,
   RotateCcw,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  LogIn,
+  LogOut,
+  ShieldCheck,
+  UserPlus,
+  Mic,
+  MicOff,
+  Palette,
+  Settings2,
+  FileAudio,
+  Check
 } from "lucide-react";
 import { Character, Message, ScrollChapter, MissionState, ArcSettings } from "./types";
 import { DEFAULT_CHARACTER, BREATHING_STYLES, SCROLL_PRESETS, TRENDING_TECHNIQUES, ARCS, IMAGES } from "./data";
 
+type AuthMode = "login" | "signup";
+type AppTab = "remixTheme" | "remixSettings" | "remixVoice" | "discovery" | "training" | "library" | "intel";
+type SpeechRecognitionInstance = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  onresult: ((event: any) => void) | null;
+  onerror: ((event: any) => void) | null;
+  onend: (() => void) | null;
+};
+
+type AuthUser = {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+};
+
+const AUTH_STORAGE_KEY = "nichirin.currentUser";
+
+const COMIC_THEMES = [
+  {
+    id: "demon-slayer",
+    title: "鬼灭之刃",
+    subtitle: "呼吸法、鬼杀队、血鬼术与柱训练",
+    imageUrl: IMAGES.heroFlame,
+    accent: "from-[#bd1020] to-[#ffb957]",
+    settings: ["呼吸法", "日轮刀颜色", "鬼杀队阶级", "血鬼术对手", "任务地点"]
+  },
+  {
+    id: "one-piece",
+    title: "航海王",
+    subtitle: "恶魔果实、霸气、海贼团与伟大航路",
+    imageUrl: IMAGES.mangaTorii,
+    accent: "from-[#1c7ced] to-[#ffb957]",
+    settings: ["恶魔果实", "霸气类型", "船员定位", "岛屿生态", "悬赏身份"]
+  },
+  {
+    id: "jujutsu",
+    title: "咒术回战",
+    subtitle: "术式、领域展开、咒具与高专任务",
+    imageUrl: IMAGES.mangaEye,
+    accent: "from-[#4f46e5] to-[#bd1020]",
+    settings: ["天生术式", "领域展开", "咒具", "束缚条件", "任务等级"]
+  }
+];
+
+const CORE_SETTING_OPTIONS: Record<string, string[]> = {
+  "呼吸法": ["水之呼吸", "炎之呼吸", "雷之呼吸", "花之呼吸", "自创呼吸法"],
+  "日轮刀颜色": ["漆黑", "赤红", "深蓝", "金黄", "渐变双色"],
+  "鬼杀队阶级": ["癸", "庚", "甲", "继子", "柱候补"],
+  "血鬼术对手": ["梦境操控", "蛛丝傀儡", "冰莲分身", "影子沼泽", "声音幻觉"],
+  "任务地点": ["那田蜘蛛山", "无限列车", "蝶屋庭院", "浅草夜街", "雪山神社"],
+  "恶魔果实": ["自然系", "超人系", "动物系", "幻兽种", "无果实剑士"],
+  "霸气类型": ["见闻色", "武装色", "霸王色", "双霸气", "觉醒训练中"],
+  "船员定位": ["航海士", "剑士", "狙击手", "船医", "考古学者"],
+  "岛屿生态": ["空岛", "冬岛", "机械岛", "海底遗迹", "移动森林"],
+  "悬赏身份": ["新人海贼", "革命军协力者", "海军卧底", "七武海候补", "失落王国后裔"],
+  "天生术式": ["影法术", "咒言", "空间扭曲", "记忆燃烧", "自创术式"],
+  "领域展开": ["静默剧场", "黑潮神社", "镜面牢笼", "星图病房", "未完成领域"],
+  "咒具": ["短刀", "缠布长枪", "铃铛", "黑绳", "指环"],
+  "束缚条件": ["夜晚增强", "不能说谎", "受伤后增幅", "保护他人时发动", "失去记忆换力量"],
+  "任务等级": ["四级", "二级", "准一级", "一级", "特级调查"]
+};
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"discovery" | "training" | "library" | "intel">("training");
+  const [activeTab, setActiveTab] = useState<AppTab>("remixTheme");
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
+    try {
+      const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [authName, setAuthName] = useState("");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
+
+  // Remix flow state
+  const [selectedThemeId, setSelectedThemeId] = useState(COMIC_THEMES[0].id);
+  const [selectedCoreSetting, setSelectedCoreSetting] = useState(COMIC_THEMES[0].settings[0]);
+  const [selectedCoreOption, setSelectedCoreOption] = useState(CORE_SETTING_OPTIONS[COMIC_THEMES[0].settings[0]][0]);
+  const [voicePrompt, setVoicePrompt] = useState("");
+  const [isListening, setIsListening] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   
   // Character state
   const [character, setCharacter] = useState<Character>(DEFAULT_CHARACTER);
@@ -81,6 +181,109 @@ export default function App() {
 
   // Share Notification State
   const [sharedToast, setSharedToast] = useState(false);
+
+  const selectedTheme = COMIC_THEMES.find((theme) => theme.id === selectedThemeId) || COMIC_THEMES[0];
+  const selectedSettingOptions = CORE_SETTING_OPTIONS[selectedCoreSetting] || [];
+
+  function selectRemixTheme(themeId: string) {
+    const theme = COMIC_THEMES.find((item) => item.id === themeId) || COMIC_THEMES[0];
+    const firstSetting = theme.settings[0];
+    setSelectedThemeId(theme.id);
+    setSelectedCoreSetting(firstSetting);
+    setSelectedCoreOption(CORE_SETTING_OPTIONS[firstSetting]?.[0] || "");
+  }
+
+  function selectCoreSetting(setting: string) {
+    setSelectedCoreSetting(setting);
+    setSelectedCoreOption(CORE_SETTING_OPTIONS[setting]?.[0] || "");
+  }
+
+  function toggleVoiceInput() {
+    const SpeechRecognitionCtor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    setVoiceError(null);
+
+    if (!SpeechRecognitionCtor) {
+      setVoiceError("当前浏览器不支持语音识别，可以先直接输入文字。");
+      return;
+    }
+
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+      setIsListening(false);
+      return;
+    }
+
+    const recognition: SpeechRecognitionInstance = new SpeechRecognitionCtor();
+    recognitionRef.current = recognition;
+    recognition.lang = "zh-CN";
+    recognition.continuous = false;
+    recognition.interimResults = true;
+
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results)
+        .map((result: any) => result[0]?.transcript || "")
+        .join("");
+      setVoicePrompt(transcript);
+    };
+    recognition.onerror = () => {
+      setVoiceError("没有听清楚，请再试一次，或改用文字输入。");
+      recognitionRef.current = null;
+      setIsListening(false);
+    };
+    recognition.onend = () => {
+      recognitionRef.current = null;
+      setIsListening(false);
+    };
+
+    setIsListening(true);
+    recognition.start();
+  }
+
+  async function handleAuthSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setAuthError(null);
+    setIsAuthLoading(true);
+
+    try {
+      const endpoint = authMode === "signup" ? "/api/auth/signup" : "/api/auth/login";
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: authName,
+          email: authEmail,
+          password: authPassword
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Authentication failed.");
+      }
+
+      setCurrentUser(data.user);
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data.user));
+      if (authMode === "signup") {
+        setCharNameInput(data.user.name);
+        setCharacter((prev) => ({ ...prev, name: data.user.name }));
+      }
+      setAuthName("");
+      setAuthPassword("");
+    } catch (err: any) {
+      setAuthError(err.message || "Authentication failed.");
+    } finally {
+      setIsAuthLoading(false);
+    }
+  }
+
+  function handleLogout() {
+    setCurrentUser(null);
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    setAuthMode("login");
+    setAuthPassword("");
+    setAuthError(null);
+  }
 
   // Preset switchers
   const PRESETS_CHARACTER = [
@@ -437,6 +640,141 @@ export default function App() {
     setTimeout(() => setSharedToast(false), 2500);
   };
 
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-[#131313] text-[#e5e2e1] ichimatsu-bg selection:bg-[#ffb3ad] selection:text-[#68000a]">
+        <main className="min-h-screen max-w-6xl mx-auto px-4 py-8 md:py-16 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          <section className="lg:col-span-6 space-y-6">
+            <div className="inline-flex items-center gap-3 bg-[#201f1f] border border-[#5c403d] px-4 py-2">
+              <ShieldCheck className="w-5 h-5 text-[#ffb3ad]" />
+              <span className="font-label-sm text-[10px] text-[#ffb3ad] uppercase tracking-widest">Corps Access</span>
+            </div>
+            <div>
+              <h1 className="font-headline-xl text-5xl md:text-7xl text-[#ffdad7] italic leading-none tracking-tight">
+                NICHIRIN
+              </h1>
+              <p className="mt-4 max-w-xl text-[#e5bdba] text-sm md:text-base leading-relaxed">
+                Sign in to keep your slayer profile, story scrolls, and mission progress under your own account.
+              </p>
+            </div>
+            <div className="relative overflow-hidden border-2 border-[#5c403d] bg-black min-h-[320px] slash-corner-md">
+              <img src={IMAGES.heroFlame} alt="Nichirin flame mission artwork" className="absolute inset-0 w-full h-full object-cover opacity-55" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#131313] via-[#131313]/40 to-transparent"></div>
+              <div className="absolute bottom-0 left-0 right-0 p-5 border-t border-[#5c403d] bg-black/45">
+                <p className="font-label-sm text-[10px] text-[#ffb3ad] uppercase">Active Archive</p>
+                <p className="text-white text-lg font-bold mt-1">Training, Library, Discovery, and Intel</p>
+              </div>
+            </div>
+          </section>
+
+          <section className="lg:col-span-6">
+            <div className="bg-[#1c1b1b] border-2 border-[#5c403d] p-6 md:p-8 bevel-card">
+              <div className="flex bg-black border border-[#5c403d] p-1 mb-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("login");
+                    setAuthError(null);
+                  }}
+                  className={`flex-1 h-11 text-xs font-bold font-label-sm uppercase flex items-center justify-center gap-2 transition-all ${
+                    authMode === "login" ? "bg-[#bd1020] text-white" : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  <LogIn className="w-4 h-4" />
+                  Login
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("signup");
+                    setAuthError(null);
+                  }}
+                  className={`flex-1 h-11 text-xs font-bold font-label-sm uppercase flex items-center justify-center gap-2 transition-all ${
+                    authMode === "signup" ? "bg-[#bd1020] text-white" : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Sign Up
+                </button>
+              </div>
+
+              <form onSubmit={handleAuthSubmit} className="space-y-4">
+                {authMode === "signup" && (
+                  <div>
+                    <label className="font-label-sm text-[10px] text-gray-300 block mb-1 uppercase">Display Name</label>
+                    <input
+                      type="text"
+                      value={authName}
+                      onChange={(e) => setAuthName(e.target.value)}
+                      className="w-full bg-[#0e0e0e] border border-[#5c403d] px-3 py-3 text-white focus:outline-none focus:border-[#ffb3ad] font-label-sm"
+                      autoComplete="name"
+                      required
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="font-label-sm text-[10px] text-gray-300 block mb-1 uppercase">Email</label>
+                  <input
+                    type="email"
+                    value={authEmail}
+                    onChange={(e) => setAuthEmail(e.target.value)}
+                    className="w-full bg-[#0e0e0e] border border-[#5c403d] px-3 py-3 text-white focus:outline-none focus:border-[#ffb3ad] font-label-sm"
+                    autoComplete="email"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="font-label-sm text-[10px] text-gray-300 block mb-1 uppercase">Password</label>
+                  <input
+                    type="password"
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    className="w-full bg-[#0e0e0e] border border-[#5c403d] px-3 py-3 text-white focus:outline-none focus:border-[#ffb3ad] font-label-sm"
+                    autoComplete={authMode === "signup" ? "new-password" : "current-password"}
+                    minLength={6}
+                    required
+                  />
+                </div>
+
+                {authError && (
+                  <div className="bg-[#bd1020]/20 border border-[#bd1020] text-[#ffb3ad] px-3 py-3 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <span>{authError}</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={isAuthLoading}
+                  className="w-full h-14 bg-[#bd1020] hover:brightness-110 disabled:opacity-60 text-white font-headline-md text-xs tracking-widest font-black flex items-center justify-center gap-3 border-t-2 border-[#ffb3ad] active:scale-[0.99] transition-all"
+                >
+                  {isAuthLoading ? (
+                    <>
+                      <RotateCcw className="w-5 h-5 animate-spin" />
+                      PROCESSING
+                    </>
+                  ) : authMode === "signup" ? (
+                    <>
+                      <UserPlus className="w-5 h-5" />
+                      CREATE ACCOUNT
+                    </>
+                  ) : (
+                    <>
+                      <LogIn className="w-5 h-5" />
+                      ENTER APP
+                    </>
+                  )}
+                </button>
+              </form>
+            </div>
+          </section>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div id="nichirin-app-root" className="min-h-screen bg-[#131313] text-[#e5e2e1] font-body-md overflow-x-hidden pb-24 md:pb-8 selection:bg-[#ffb3ad] selection:text-[#68000a]">
       
@@ -470,6 +808,20 @@ export default function App() {
         
         {/* Preset profiles picker triggers inside header */}
         <div className="flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-2 border border-[#5c403d] bg-black/30 px-3 py-2">
+            <User className="w-4 h-4 text-[#ffb3ad]" />
+            <div className="leading-none">
+              <span className="font-label-sm text-[9px] text-gray-400 uppercase block">Signed in</span>
+              <span className="font-label-sm text-[11px] text-white max-w-32 truncate block">{currentUser.name}</span>
+            </div>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="w-9 h-9 flex items-center justify-center border border-[#5c403d] text-[#ffb3ad] hover:bg-[#bd1020] hover:text-white transition-all"
+            title="Log out"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
           <span className="font-label-sm text-[10px] text-[#ffb3ad] uppercase opacity-70 hidden lg:inline">Quick presets:</span>
           <div className="flex gap-2">
             {PRESETS_CHARACTER.map((preset, idx) => (
@@ -490,6 +842,296 @@ export default function App() {
       </header>
 
       <main id="app-main-content" className="max-w-7xl mx-auto px-4 py-6 md:py-12 min-h-[calc(100vh-140px)]">
+        {["remixTheme", "remixSettings", "remixVoice"].includes(activeTab) && (
+          <div className="mb-8 border border-[#5c403d] bg-[#1c1b1b] p-3 md:p-4">
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { id: "remixTheme", label: "选择主题", icon: Palette },
+                { id: "remixSettings", label: "核心设定", icon: Settings2 },
+                { id: "remixVoice", label: "语音二创", icon: FileAudio }
+              ].map((step, index) => {
+                const Icon = step.icon;
+                const isActive = activeTab === step.id;
+                return (
+                  <button
+                    key={step.id}
+                    type="button"
+                    onClick={() => setActiveTab(step.id as AppTab)}
+                    className={`h-14 md:h-16 flex items-center justify-center gap-2 border text-xs md:text-sm font-bold transition-all ${
+                      isActive
+                        ? "bg-[#bd1020] border-[#ffb3ad] text-white"
+                        : "bg-black/40 border-[#5c403d] text-[#e5bdba] hover:border-[#ffb3ad]"
+                    }`}
+                  >
+                    <span className="w-6 h-6 flex items-center justify-center bg-black/30 text-[10px]">{index + 1}</span>
+                    <Icon className="w-4 h-4" />
+                    <span>{step.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* REMIX PAGE 1: choose comic theme */}
+        {activeTab === "remixTheme" && (
+          <div id="remix-theme-page" className="space-y-8 animate-fade-in">
+            <section className="relative min-h-[300px] md:min-h-[380px] overflow-hidden border-2 border-[#5c403d] slash-corner-md flex items-end p-6 md:p-10">
+              <img src={selectedTheme.imageUrl} alt={selectedTheme.title} className="absolute inset-0 w-full h-full object-cover opacity-50" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#131313] via-[#131313]/70 to-transparent"></div>
+              <div className="relative z-10 max-w-3xl">
+                <span className="inline-flex items-center gap-2 bg-[#bd1020] px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white">
+                  <Sparkles className="w-3 h-3" />
+                  二创向导
+                </span>
+                <h2 className="mt-4 font-headline-xl text-4xl md:text-6xl text-white tracking-tight">
+                  选择你想二创的漫画主题
+                </h2>
+                <p className="mt-4 text-[#e5bdba] text-sm md:text-base leading-relaxed max-w-2xl">
+                  先确定世界观方向，后面会根据主题给出对应的核心设定与语音创作入口。
+                </p>
+              </div>
+            </section>
+
+            <section className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {COMIC_THEMES.map((theme) => (
+                <button
+                  key={theme.id}
+                  type="button"
+                  onClick={() => selectRemixTheme(theme.id)}
+                  className={`group text-left border-2 bg-[#1c1b1b] overflow-hidden transition-all bevel-card ${
+                    selectedThemeId === theme.id ? "border-[#bd1020]" : "border-[#5c403d] hover:border-[#ffb3ad]"
+                  }`}
+                >
+                  <div className="relative h-48 bg-black overflow-hidden">
+                    <img src={theme.imageUrl} alt={theme.title} className="w-full h-full object-cover opacity-70 group-hover:scale-105 transition-transform duration-500" />
+                    <div className={`absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t ${theme.accent} opacity-60`}></div>
+                    {selectedThemeId === theme.id && (
+                      <span className="absolute top-3 right-3 w-8 h-8 bg-[#bd1020] border border-[#ffb3ad] flex items-center justify-center">
+                        <Check className="w-4 h-4 text-white" />
+                      </span>
+                    )}
+                  </div>
+                  <div className="p-5">
+                    <h3 className="text-white text-xl font-bold">{theme.title}</h3>
+                    <p className="mt-2 text-xs text-[#e5bdba] leading-relaxed">{theme.subtitle}</p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {theme.settings.slice(0, 3).map((setting) => (
+                        <span key={setting} className="px-2 py-1 bg-black border border-[#5c403d] text-[10px] text-gray-300">
+                          {setting}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </section>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setActiveTab("remixSettings")}
+                className="px-8 py-4 bg-[#bd1020] text-white font-bold text-sm flex items-center gap-3 border-t-2 border-[#ffb3ad] hover:brightness-110"
+              >
+                下一步：选择核心设定
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* REMIX PAGE 2: choose core setting */}
+        {activeTab === "remixSettings" && (
+          <div id="remix-settings-page" className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-fade-in">
+            <aside className="lg:col-span-4 bg-[#1c1b1b] border-2 border-[#5c403d] p-5 bevel-card">
+              <div className="relative h-56 overflow-hidden border border-[#5c403d] bg-black">
+                <img src={selectedTheme.imageUrl} alt={selectedTheme.title} className="w-full h-full object-cover opacity-65" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black to-transparent"></div>
+                <div className="absolute bottom-4 left-4 right-4">
+                  <p className="text-[10px] text-[#ffb3ad] font-bold uppercase">当前主题</p>
+                  <h2 className="text-2xl font-bold text-white mt-1">{selectedTheme.title}</h2>
+                  <p className="text-xs text-[#e5bdba] mt-2">{selectedTheme.subtitle}</p>
+                </div>
+              </div>
+
+              <div className="mt-5 space-y-2">
+                {selectedTheme.settings.map((setting) => (
+                  <button
+                    key={setting}
+                    type="button"
+                    onClick={() => selectCoreSetting(setting)}
+                    className={`w-full px-4 py-3 border text-left text-sm font-bold transition-all flex items-center justify-between ${
+                      selectedCoreSetting === setting
+                        ? "bg-[#bd1020] border-[#ffb3ad] text-white"
+                        : "bg-black/40 border-[#5c403d] text-[#e5bdba] hover:border-[#ffb3ad]"
+                    }`}
+                  >
+                    <span>{setting}</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                ))}
+              </div>
+            </aside>
+
+            <section className="lg:col-span-8 space-y-6">
+              <div className="border-l-8 border-[#bd1020] pl-5">
+                <p className="text-[10px] text-[#ffb3ad] font-bold uppercase">核心设定</p>
+                <h2 className="mt-2 text-3xl md:text-5xl font-headline-xl text-white">
+                  选择「{selectedCoreSetting}」的二创方向
+                </h2>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {selectedSettingOptions.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setSelectedCoreOption(option)}
+                    className={`min-h-28 text-left p-5 border-2 transition-all bevel-card ${
+                      selectedCoreOption === option
+                        ? "border-[#bd1020] bg-[#bd1020]/15"
+                        : "border-[#5c403d] bg-[#1c1b1b] hover:border-[#ffb3ad]"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-white text-lg font-bold">{option}</p>
+                        <p className="mt-2 text-xs text-[#e5bdba] leading-relaxed">
+                          将它作为故事的能力源、冲突规则或角色身份基础。
+                        </p>
+                      </div>
+                      {selectedCoreOption === option && (
+                        <span className="w-8 h-8 bg-[#bd1020] border border-[#ffb3ad] flex items-center justify-center flex-shrink-0">
+                          <Check className="w-4 h-4 text-white" />
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="bg-[#201f1f] border border-[#5c403d] p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <p className="text-[10px] text-[#ffb3ad] font-bold uppercase">已选择</p>
+                  <p className="mt-1 text-white text-sm">
+                    {selectedTheme.title} / {selectedCoreSetting} / {selectedCoreOption}
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("remixTheme")}
+                    className="px-5 py-3 border border-[#5c403d] text-[#e5bdba] text-xs font-bold hover:border-[#ffb3ad]"
+                  >
+                    返回主题
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("remixVoice")}
+                    className="px-6 py-3 bg-[#bd1020] text-white text-xs font-bold flex items-center gap-2 border-t-2 border-[#ffb3ad] hover:brightness-110"
+                  >
+                    下一步：语音二创
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {/* REMIX PAGE 3: voice personalization */}
+        {activeTab === "remixVoice" && (
+          <div id="remix-voice-page" className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-fade-in">
+            <section className="lg:col-span-7 bg-[#1c1b1b] border-2 border-[#5c403d] p-6 md:p-8 bevel-card">
+              <div className="flex items-center justify-between gap-4 border-b border-[#5c403d] pb-5">
+                <div>
+                  <p className="text-[10px] text-[#ffb3ad] font-bold uppercase">个性化二创内容</p>
+                  <h2 className="mt-2 text-3xl md:text-5xl font-headline-xl text-white">用语音说出你的脑洞</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleVoiceInput}
+                  className={`w-16 h-16 flex items-center justify-center border-2 transition-all ${
+                    isListening
+                      ? "bg-[#bd1020] border-[#ffb3ad] text-white animate-pulse"
+                      : "bg-black border-[#5c403d] text-[#ffb3ad] hover:border-[#ffb3ad]"
+                  }`}
+                  title={isListening ? "停止录音" : "开始录音"}
+                >
+                  {isListening ? <MicOff className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
+                </button>
+              </div>
+
+              <div className="mt-6 space-y-4">
+                <textarea
+                  rows={9}
+                  value={voicePrompt}
+                  onChange={(e) => setVoicePrompt(e.target.value)}
+                  placeholder="例如：主角是一个害怕战斗但能听见刀声的人，他想用炎之呼吸保护妹妹。故事要热血一点，结尾留下悬念。"
+                  className="w-full bg-[#0e0e0e] border border-[#5c403d] px-4 py-4 text-white text-sm leading-relaxed focus:outline-none focus:border-[#ffb3ad]"
+                />
+
+                {voiceError && (
+                  <div className="bg-[#bd1020]/20 border border-[#bd1020] text-[#ffb3ad] px-4 py-3 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <span>{voiceError}</span>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {["更热血", "更搞笑", "更虐心"].map((tone) => (
+                    <button
+                      key={tone}
+                      type="button"
+                      onClick={() => setVoicePrompt((prev) => `${prev}${prev ? "\n" : ""}希望整体风格：${tone}。`)}
+                      className="px-4 py-3 bg-black/50 border border-[#5c403d] text-xs text-[#e5bdba] font-bold hover:border-[#ffb3ad]"
+                    >
+                      {tone}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <aside className="lg:col-span-5 space-y-5">
+              <div className="relative h-72 overflow-hidden border-2 border-[#5c403d] slash-corner-md bg-black">
+                <img src={selectedTheme.imageUrl} alt={selectedTheme.title} className="w-full h-full object-cover opacity-55" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#131313] via-transparent to-transparent"></div>
+                <div className="absolute bottom-0 left-0 right-0 p-5">
+                  <p className="text-[10px] text-[#ffb3ad] font-bold uppercase">二创摘要</p>
+                  <h3 className="mt-2 text-2xl text-white font-bold">{selectedTheme.title}</h3>
+                  <p className="mt-2 text-sm text-[#e5bdba]">{selectedCoreSetting}：{selectedCoreOption}</p>
+                </div>
+              </div>
+
+              <div className="bg-[#201f1f] border border-[#5c403d] p-5">
+                <p className="text-[10px] text-[#ffb3ad] font-bold uppercase mb-3">生成提示词预览</p>
+                <div className="bg-black/50 border border-[#5c403d] p-4 text-xs text-[#e5bdba] leading-relaxed whitespace-pre-line min-h-44">
+                  漫画主题：{selectedTheme.title}
+                  {"\n"}核心设定：{selectedCoreSetting} - {selectedCoreOption}
+                  {"\n"}用户个性化内容：{voicePrompt || "等待语音或文字输入..."}
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("remixSettings")}
+                  className="flex-1 px-5 py-4 border border-[#5c403d] text-[#e5bdba] text-xs font-bold hover:border-[#ffb3ad]"
+                >
+                  返回设定
+                </button>
+                <button
+                  type="button"
+                  onClick={notifyShare}
+                  className="flex-1 px-5 py-4 bg-[#bd1020] text-white text-xs font-bold border-t-2 border-[#ffb3ad] hover:brightness-110"
+                >
+                  保存二创草稿
+                </button>
+              </div>
+            </aside>
+          </div>
+        )}
         
         {/* TAB 1: TRAINING - Character Creator */}
         {activeTab === "training" && (
@@ -1538,11 +2180,43 @@ export default function App() {
 
       {/* Persistent Bottom Layout Navigation drawer */}
       <nav id="nichirin-bottom-tabs" className="fixed bottom-0 left-0 w-full z-40 flex justify-around items-stretch h-20 bg-[#1c1b1b] border-t-4 border-[#bd1020] shadow-2xl select-none">
+        <button 
+          id="tab-btn-remix-theme"
+          onClick={() => setActiveTab("remixTheme")}
+          className={`flex-1 flex flex-col items-center justify-center p-2 transition-all outline-none ${
+            activeTab === "remixTheme" ? "bg-[#bd1020] text-white font-bold" : "text-gray-400 hover:text-white"
+          }`}
+        >
+          <Palette className="w-5 h-5 mb-1" />
+          <span className="font-label-sm text-[9px] uppercase tracking-wider">主题</span>
+        </button>
+
+        <button 
+          id="tab-btn-remix-settings"
+          onClick={() => setActiveTab("remixSettings")}
+          className={`flex-1 flex flex-col items-center justify-center p-2 transition-all outline-none border-l border-[#5c403d] ${
+            activeTab === "remixSettings" ? "bg-[#bd1020] text-white font-bold" : "text-gray-400 hover:text-white"
+          }`}
+        >
+          <Settings2 className="w-5 h-5 mb-1" />
+          <span className="font-label-sm text-[9px] uppercase tracking-wider">设定</span>
+        </button>
+
+        <button 
+          id="tab-btn-remix-voice"
+          onClick={() => setActiveTab("remixVoice")}
+          className={`flex-1 flex flex-col items-center justify-center p-2 transition-all outline-none border-l border-[#5c403d] ${
+            activeTab === "remixVoice" ? "bg-[#bd1020] text-white font-bold" : "text-gray-400 hover:text-white"
+          }`}
+        >
+          <Mic className="w-5 h-5 mb-1" />
+          <span className="font-label-sm text-[9px] uppercase tracking-wider">语音</span>
+        </button>
         
         <button 
           id="tab-btn-discovery"
           onClick={() => setActiveTab("discovery")}
-          className={`flex-1 flex flex-col items-center justify-center p-2 transition-all outline-none ${
+          className={`flex-1 flex-col items-center justify-center p-2 transition-all outline-none hidden md:flex border-l border-[#5c403d] ${
             activeTab === "discovery" ? "bg-[#bd1020] text-white font-bold" : "text-gray-400 hover:text-white"
           }`}
         >
@@ -1553,7 +2227,7 @@ export default function App() {
         <button 
           id="tab-btn-training"
           onClick={() => setActiveTab("training")}
-          className={`flex-1 flex flex-col items-center justify-center p-2 transition-all outline-none ${
+          className={`flex-1 flex-col items-center justify-center p-2 transition-all outline-none hidden md:flex ${
             activeTab === "training" ? "bg-[#bd1020] text-white font-bold border-x border-[#5c403d]" : "text-gray-400 hover:text-white border-x border-[#5c403d]"
           }`}
         >
@@ -1564,7 +2238,7 @@ export default function App() {
         <button 
           id="tab-btn-library"
           onClick={() => setActiveTab("library")}
-          className={`flex-1 flex flex-col items-center justify-center p-2 transition-all outline-none ${
+          className={`flex-1 flex-col items-center justify-center p-2 transition-all outline-none hidden md:flex ${
             activeTab === "library" ? "bg-[#bd1020] text-white font-bold border-r border-[#5c403d]" : "text-gray-400 hover:text-white border-r border-[#5c403d]"
           }`}
         >
@@ -1575,7 +2249,7 @@ export default function App() {
         <button 
           id="tab-btn-intel"
           onClick={() => setActiveTab("intel")}
-          className={`flex-1 flex flex-col items-center justify-center p-2 transition-all outline-none ${
+          className={`flex-1 flex-col items-center justify-center p-2 transition-all outline-none hidden md:flex ${
             activeTab === "intel" ? "bg-[#bd1020] text-white font-bold" : "text-gray-400 hover:text-white"
           }`}
         >
