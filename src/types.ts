@@ -26,8 +26,8 @@ export interface ScrollChapter {
   title: string;
   japaneseTitle: string;
   summary: string;
-  japaneseStoryText: string;
-  englishSummary: string;
+  正文: string;
+  简介: string;
   imageUrls: string[];
 }
 

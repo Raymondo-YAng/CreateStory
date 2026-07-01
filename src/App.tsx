@@ -1,25 +1,16 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
-  Compass,
-  Flame,
-  Waves,
-  Zap,
   BookOpen,
   ChevronRight,
   Share2,
   Send,
   Sparkles,
   Bot,
-  Play,
-  Moon,
-  Sun,
   User,
   Activity,
-  Award,
-  Book,
   PenTool,
+  PenLine,
   RotateCcw,
-  CheckCircle,
   AlertCircle,
   LogIn,
   LogOut,
@@ -32,11 +23,12 @@ import {
   FileAudio,
   Check
 } from "lucide-react";
-import { Character, Message, ScrollChapter, MissionState, ArcSettings } from "./types";
-import { DEFAULT_CHARACTER, BREATHING_STYLES, SCROLL_PRESETS, TRENDING_TECHNIQUES, ARCS, IMAGES } from "./data";
+import { Character, Message, ScrollChapter } from "./types";
+import { DEFAULT_CHARACTER, SCROLL_PRESETS, IMAGES } from "./data";
 
 type AuthMode = "login" | "signup";
-type AppTab = "remixTheme" | "remixSettings" | "remixVoice" | "discovery" | "training" | "library" | "intel";
+type AppTab = "create" | "library";
+type CreateStep = "theme" | "settings" | "voice";
 type SpeechRecognitionInstance = {
   continuous: boolean;
   interimResults: boolean;
@@ -53,6 +45,28 @@ type AuthUser = {
   name: string;
   email: string;
   createdAt: string;
+};
+
+type StoredCreation = {
+  id: string;
+  userId: string;
+  createdAt: string;
+  settings: {
+    themeId: string;
+    themeTitle: string;
+    themeSubtitle: string;
+    coreSetting: string;
+    coreOption: string;
+    userPrompt: string;
+    protagonistName: string;
+  };
+  story: {
+    title: string;
+    chapterNumber: string;
+    publishDate: string;
+    正文: string;
+    简介: string;
+  };
 };
 
 const AUTH_STORAGE_KEY = "nichirin.currentUser";
@@ -81,6 +95,38 @@ const COMIC_THEMES = [
     imageUrl: IMAGES.mangaEye,
     accent: "from-[#4f46e5] to-[#bd1020]",
     settings: ["天生术式", "领域展开", "咒具", "束缚条件", "任务等级"]
+  },
+  {
+    id: "naruto",
+    title: "火影忍者",
+    subtitle: "查克拉、忍术、血继限界与忍者任务",
+    imageUrl: IMAGES.mangaClash,
+    accent: "from-[#f97316] to-[#1d4ed8]",
+    settings: ["查克拉属性", "忍术类型", "忍者阶级", "血继限界", "任务地点"]
+  },
+  {
+    id: "attack-on-titan",
+    title: "进击的巨人",
+    subtitle: "立体机动、巨人化、城墙与自由之翼",
+    imageUrl: IMAGES.arcNatagumo,
+    accent: "from-[#64748b] to-[#dc2626]",
+    settings: ["巨人形态", "立体机动装置", "军团隶属", "战斗风格", "任务地点"]
+  },
+  {
+    id: "my-hero",
+    title: "我的英雄学院",
+    subtitle: "个性、英雄学校、职业英雄与救援训练",
+    imageUrl: IMAGES.thunderKatana,
+    accent: "from-[#16a34a] to-[#ef4444]",
+    settings: ["个性类型", "英雄学校", "职业目标", "战斗定位", "训练场景"]
+  },
+  {
+    id: "bleach",
+    title: "死神",
+    subtitle: "斩魄刀、鬼道、虚化与尸魂界",
+    imageUrl: IMAGES.waterWaves,
+    accent: "from-[#0f172a] to-[#7c3aed]",
+    settings: ["斩魄刀类型", "鬼道", "死神阶级", "虚化状态", "任务地点"]
   }
 ];
 
@@ -99,11 +145,28 @@ const CORE_SETTING_OPTIONS: Record<string, string[]> = {
   "领域展开": ["静默剧场", "黑潮神社", "镜面牢笼", "星图病房", "未完成领域"],
   "咒具": ["短刀", "缠布长枪", "铃铛", "黑绳", "指环"],
   "束缚条件": ["夜晚增强", "不能说谎", "受伤后增幅", "保护他人时发动", "失去记忆换力量"],
-  "任务等级": ["四级", "二级", "准一级", "一级", "特级调查"]
+  "任务等级": ["四级", "二级", "准一级", "一级", "特级调查"],
+  "查克拉属性": ["火遁", "水遁", "雷遁", "风遁", "土遁"],
+  "忍术类型": ["体术", "幻术", "封印术", "医疗忍术", "禁术"],
+  "忍者阶级": ["下忍", "中忍", "上忍", "暗部", "影护卫"],
+  "血继限界": ["写轮眼", "白眼", "木遁", "冰遁", "尘遁"],
+  "巨人形态": ["进击的巨人", "铠之巨人", "女型巨人", "兽之巨人", "无垢巨人"],
+  "立体机动装置": ["标准型", "雷枪装备", "狙击型", "改装型", "试验型"],
+  "军团隶属": ["调查兵团", "宪兵团", "驻扎兵团", "训练兵团", "隐秘部队"],
+  "战斗风格": ["斩击后颈", "团队协作", "单兵突袭", "防御掩护", "侦查诱敌"],
+  "个性类型": ["强化型", "放出型", "变身型", "异型", "无个性"],
+  "英雄学校": ["雄英高中", "士杰高中", "瓶胎高中", "私立中学", "候补培训"],
+  "职业目标": ["职业英雄", "救援英雄", "幕后支援", "英雄事务所", "反英雄"],
+  "训练场景": ["USJ", "体育场", "城市街区", "山林演习场", "灾害模拟区"],
+  "斩魄刀类型": ["始解", "卍解", "鬼道系", "直接攻击型", "卍解未完成"],
+  "鬼道": ["破道", "缚道", "回道", "禁咒", "自创鬼道"],
+  "死神阶级": ["流魂街平民", "真央灵术院生", "席官", "副队长", "队长候补"],
+  "虚化状态": ["未觉醒", "假面军势", "完全虚化", "控制虚化", "抗拒虚化"]
 };
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<AppTab>("remixTheme");
+  const [activeTab, setActiveTab] = useState<AppTab>("create");
+  const [createStep, setCreateStep] = useState<CreateStep>("theme");
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
     try {
@@ -130,6 +193,7 @@ export default function App() {
   
   // Character state
   const [character, setCharacter] = useState<Character>(DEFAULT_CHARACTER);
+  const [protagonistName, setProtagonistName] = useState(character.name);
   const [customTraitsInput, setCustomTraitsInput] = useState<string>(DEFAULT_CHARACTER.customTraits);
   const [charNameInput, setCharNameInput] = useState<string>(DEFAULT_CHARACTER.name);
   const [isGeneratingChar, setIsGeneratingChar] = useState(false);
@@ -141,6 +205,12 @@ export default function App() {
   const [customScrollTitle, setCustomScrollTitle] = useState("");
   const [customScrollSummary, setCustomScrollSummary] = useState("");
   const [isGeneratingScroll, setIsGeneratingScroll] = useState(false);
+  const [creations, setCreations] = useState<StoredCreation[]>([]);
+  const [activeCreationId, setActiveCreationId] = useState<string | null>(null);
+  const [isCreatingSpinoff, setIsCreatingSpinoff] = useState(false);
+  const [showContinuationInput, setShowContinuationInput] = useState(false);
+  const [continuationPrompt, setContinuationPrompt] = useState("");
+  const [isContinuing, setIsContinuing] = useState(false);
 
   // Crow Messages Comment and Chat states
   const [comments, setComments] = useState([
@@ -162,28 +232,58 @@ export default function App() {
   ]);
   const [isCrowLoading, setIsCrowLoading] = useState(false);
 
-  // Intel Mission state
-  const [selectedArc, setSelectedArc] = useState<"training" | "natagumo" | "mugen_train">("natagumo");
-  const [atmosphere, setAtmosphere] = useState<"daylight" | "nocturnal">("nocturnal");
-  const [breathingFocusLevel, setBreathingFocusLevel] = useState<number>(62);
-  const [mission, setMission] = useState<MissionState>({
-    isPlaying: false,
-    arc: "natagumo",
-    consequenceText: "",
-    combatSceneText: "",
-    statusUpdate: "",
-    choices: [],
-    isVictory: false,
-    isDefeat: false,
-    choiceHistory: [],
-    isLoading: false
-  });
-
   // Share Notification State
   const [sharedToast, setSharedToast] = useState(false);
 
   const selectedTheme = COMIC_THEMES.find((theme) => theme.id === selectedThemeId) || COMIC_THEMES[0];
   const selectedSettingOptions = CORE_SETTING_OPTIONS[selectedCoreSetting] || [];
+  const activeCreation = creations.find((creation) => creation.id === activeCreationId) || null;
+  const libraryScrolls = [...creations.map((creation) => creationToScroll(creation)), ...scrollPresets];
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const userId = currentUser.id;
+
+    async function loadCreations() {
+      try {
+        const response = await fetch(`/api/creations?userId=${encodeURIComponent(userId)}`);
+        if (!response.ok) throw new Error("Could not load creations.");
+        const data = await response.json();
+        setCreations(data.creations || []);
+      } catch (err: any) {
+        setApiError(err.message || "读取 Library 创作记录失败。");
+      }
+    }
+
+    loadCreations();
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (creations.length === 0 || activeCreationId) return;
+    const latestCreation = creations[0];
+    setActiveCreationId(latestCreation.id);
+    setActiveScroll(creationToScroll(latestCreation));
+  }, [creations, activeCreationId]);
+
+  function creationToScroll(creation: StoredCreation): ScrollChapter {
+    const creationTheme = COMIC_THEMES.find((theme) => theme.id === creation.settings.themeId) || selectedTheme;
+
+    return {
+      id: creation.id,
+      chapterNumber: creation.story.chapterNumber,
+      publishDate: creation.story.publishDate,
+      title: creation.story.title,
+      japaneseTitle: "用户番外",
+      summary: `${creation.settings.themeTitle} / ${creation.settings.coreSetting} / ${creation.settings.coreOption}`,
+      正文: creation.story.正文 || (creation.story as any).japaneseStoryText || "",
+      简介: creation.story.简介 || (creation.story as any).englishSummary || "",
+      imageUrls: [
+        creationTheme.imageUrl,
+        IMAGES.mangaClash,
+        IMAGES.mangaTorii
+      ]
+    };
+  }
 
   function selectRemixTheme(themeId: string) {
     const theme = COMIC_THEMES.find((item) => item.id === themeId) || COMIC_THEMES[0];
@@ -196,6 +296,96 @@ export default function App() {
   function selectCoreSetting(setting: string) {
     setSelectedCoreSetting(setting);
     setSelectedCoreOption(CORE_SETTING_OPTIONS[setting]?.[0] || "");
+  }
+
+  function selectLibraryScroll(scroll: ScrollChapter) {
+    setActiveScroll(scroll);
+    const creation = creations.find((item) => item.id === scroll.id);
+    setActiveCreationId(creation?.id || null);
+  }
+
+  async function createSpinoffStory() {
+    if (!currentUser || isCreatingSpinoff) return;
+
+    const settings: StoredCreation["settings"] = {
+      themeId: selectedTheme.id,
+      themeTitle: selectedTheme.title,
+      themeSubtitle: selectedTheme.subtitle,
+      coreSetting: selectedCoreSetting,
+      coreOption: selectedCoreOption,
+      userPrompt: voicePrompt.trim(),
+      protagonistName: protagonistName.trim() || character.name
+    };
+
+    setIsCreatingSpinoff(true);
+    setApiError(null);
+
+    try {
+      const response = await fetch("/api/creations/spinoff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          settings
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "番外故事生成失败。");
+      }
+
+      const creation: StoredCreation = data.creation;
+      setCreations((prev) => [creation, ...prev]);
+      setActiveCreationId(creation.id);
+      setActiveScroll(creationToScroll(creation));
+      setActiveTab("library");
+      notifyShare();
+    } catch (err: any) {
+      setApiError(err.message || "番外故事生成失败。");
+    } finally {
+      setIsCreatingSpinoff(false);
+    }
+  }
+
+  async function continueStory() {
+    if (!currentUser || !activeCreation || isContinuing) return;
+
+    const prompt = continuationPrompt.trim();
+    if (!prompt) {
+      setApiError("请输入后续主题内容。");
+      return;
+    }
+
+    setIsContinuing(true);
+    setApiError(null);
+
+    try {
+      const response = await fetch("/api/creations/continue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          creationId: activeCreation.id,
+          continuationPrompt: prompt
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "续写失败。");
+      }
+
+      const updatedCreation: StoredCreation = data.creation;
+      setCreations((prev) => prev.map((c) => (c.id === updatedCreation.id ? updatedCreation : c)));
+      setActiveScroll(creationToScroll(updatedCreation));
+      setContinuationPrompt("");
+      setShowContinuationInput(false);
+    } catch (err: any) {
+      setApiError(err.message || "续写失败。");
+    } finally {
+      setIsContinuing(false);
+    }
   }
 
   function toggleVoiceInput() {
@@ -361,7 +551,7 @@ export default function App() {
     }));
   };
 
-  // REST API: Trigger Gemini-powered Dynamic Character Creator
+  // REST API: Trigger DeepSeek-powered dynamic character creator
   async function generateCharacterAI() {
     setIsGeneratingChar(true);
     setApiError(null);
@@ -411,7 +601,7 @@ export default function App() {
         backstory: `Formed by dangerous encounters in standard Taisho-era mountainsides, studying the ancestral foundations of ${character.breathingStyle}. This slayer developed an impeccable high-frequency swordsmanship and yearns to defeat Kibutsuji.`,
         techniques: mockForms
       }));
-      setApiError("Using locally forged character details. Configure your GEMINI_API_KEY in secrets to activate real Gemini content creation!");
+      setApiError("Using locally forged character details. Configure DEEPSEEK_API_KEY to activate DeepSeek content creation.");
     } finally {
       setIsGeneratingChar(false);
     }
@@ -480,8 +670,8 @@ export default function App() {
         title: customScrollTitle,
         japaneseTitle: "外伝記録",
         summary: customScrollSummary || "A customized tale generated dynamically.",
-        japaneseStoryText: scrollData.japaneseStoryText || "その刻、剣士の刀身は熱を発し、激闘が幕を開けた。",
-        englishSummary: scrollData.englishSummary || "An exclusive dynamic chapter tracing outstanding combat stories.",
+        正文: scrollData.正文 || "那一刻，剑士的刀身发热，激战拉开序幕。",
+        简介: scrollData.简介 || "一段独家动态篇章，追溯精彩的战斗故事。",
         imageUrls: [IMAGES.mangaClash, IMAGES.mangaEye, IMAGES.mangaTorii]
       };
 
@@ -498,12 +688,12 @@ export default function App() {
         title: customScrollTitle,
         japaneseTitle: "剣士外伝",
         summary: customScrollSummary || "An custom local scroll generated dynamically without secrets.",
-        japaneseStoryText: `【外伝伝記】刀身に宿る ${character.breathingStyle}！
+        正文: `【外传传记】寄宿于刀身的 ${character.breathingStyle}！
 
-烈風が吹き荒れ、少年はただひたすらに刃を見つめし。呼吸は極限に達し、腕には漆黒の筋が浮き出す。
+狂风呼啸，少年只是一心凝视着刀刃。呼吸达至极限，手臂上浮现出漆黑的筋络。
 
-「一歩も引くまい！」激突の爆炎が生じる！`,
-        englishSummary: `A marvelous tactical scroll dedicated to ${customScrollTitle}. Refined for swordsmanship practitioners.`,
+「一步也不会退！」冲突的爆炎骤然升起！`,
+        简介: `献给 ${customScrollTitle} 的精彩战术卷轴。为剑士精心撰写。`,
         imageUrls: [IMAGES.mangaClash, IMAGES.mangaEye]
       };
       setScrollPresets(prev => [fallbackLocal, ...prev]);
@@ -514,126 +704,6 @@ export default function App() {
       setIsGeneratingScroll(false);
     }
   }
-
-  // Interactive Text-Adventure Mission Simulator Trigger
-  async function startMissionGame(startingChoice?: string) {
-    setMission(prev => ({ ...prev, isLoading: true, isPlaying: true }));
-    try {
-      const choicesSoFar = mission.choiceHistory;
-      if (startingChoice) {
-        choicesSoFar.push(startingChoice);
-      }
-
-      const response = await fetch("/api/run-mission", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          arc: selectedArc,
-          character: {
-            name: character.name,
-            breathingStyle: character.breathingStyle,
-            selectedTechnique: character.techniques[0]?.name || "First Form"
-          },
-          atmosphere,
-          breathingFocus: breathingFocusLevel,
-          choiceHistory: choicesSoFar
-        })
-      });
-
-      if (!response.ok) throw new Error("Server simulated logic used.");
-      const gameData = await response.json();
-
-      setMission(prev => ({
-        ...prev,
-        consequenceText: gameData.consequenceText,
-        combatSceneText: gameData.combatSceneText,
-        statusUpdate: gameData.statusUpdate,
-        choices: gameData.choices || [],
-        isVictory: gameData.isVictory || false,
-        isDefeat: gameData.isDefeat || false,
-        choiceHistory: choicesSoFar,
-        isLoading: false
-      }));
-
-    } catch (err) {
-      // High stakes local text-adventure rules engine in case server isn't available
-      const lastChoiceStr = startingChoice || "Initial arrival";
-      let textState = "";
-      let sceneState = "";
-      let statusState = "Breathing status: Tense focused!";
-      let victoryState = false;
-      let defeatState = false;
-      let optionsList = [
-        { id: 1, text: `Unleash ${character.techniques[0]?.name || "First Form"} to strike with supreme elemental weight!` },
-        { id: 2, text: "Observe the layout and step back into defensive guard stance." },
-        { id: 3, text: "Grip the hilt and jump onto the tree branches to evade." }
-      ];
-
-      if (mission.choiceHistory.length === 0) {
-        if (selectedArc === "natagumo") {
-          textState = `You arrive at Mount Natagumo under the chilling ${atmosphere} gloom. Dense violet sticky spiderwebs hang over gnarled pine structures. You hear a chilling string melody echoing above.`;
-          sceneState = `A puppeted demon slayer corpse, controlled by transparent string threads, suddenly lunges at you, swing a broken sword as spider mandibles click!`;
-          statusState = "Total Concentration Level at 65%. Your sword flashes in response.";
-        } else if (selectedArc === "mugen_train") {
-          textState = "You board the whistling, nightmarish Mugen Train carriage. The engine room emits deep soot and the air smells intensely of sweet blood.";
-          sceneState = "Enmu's giant biological tentacles start sprouting through the luggage racks, trying to strangle innocent sleeping civilians!";
-          statusState = "Uncomfortable rattling vibes. Flame meter is rising!";
-        } else {
-          textState = "You stand inside the Butterfly Mansion bamboo courtyard. Shinobu Kocho monitors with a playful smile, asking you to crack a massive clay gourd.";
-          sceneState = "A rigorous reflex challenge starts: water basins fly in rapid circles as Kanao Tsuyuri moves like a swift flash to pin you down!";
-        }
-      } else {
-        const turnCount = mission.choiceHistory.length;
-        if (turnCount >= 3) {
-          // Final outcome
-          if (Math.random() > 0.3) {
-            victoryState = true;
-            textState = `CRITICAL STRIKE DECISION! Backed by your amazing ${character.breathingStyle} mastery and concentration, your blade glows fully loaded and cleanly severs the demonic threat!`;
-            sceneState = "With a massive explosion of element patterns, the demon dust evaporates cleanly as the sun's first dawn rays breach the forest canopy!";
-            statusState = "VICTORY! The selection exam passes. The slayer corps congratulates your heroic feat!";
-            optionsList = [];
-          } else {
-            defeatState = true;
-            textState = "You ran out of blood oxygen focus, causing your sword strike to miss the central core!";
-            sceneState = "The demon webs construct an absolute trap, bounding your blade and throwing you to the hard floor!";
-            statusState = "DEFEAT! Re-train your Breathing stats and try again.";
-            optionsList = [];
-          }
-        } else {
-          textState = `You executed: "${lastChoiceStr}". It created massive kinetic friction, but the threat quickly adapts, taking a swift counter posture in the Taisho shadows!`;
-          sceneState = "A secondary hazard emerges from the rear! A large spider-family shadow sweeps in carrying poison gas!";
-          statusState = `Stamina state: ${character.stamina - (turnCount * 10)}%. Concentration calibrated.`;
-        }
-      }
-
-      setMission(prev => ({
-        ...prev,
-        consequenceText: textState,
-        combatSceneText: sceneState,
-        statusUpdate: statusState,
-        choices: optionsList,
-        isVictory: victoryState,
-        isDefeat: defeatState,
-        choiceHistory: mission.choiceHistory,
-        isLoading: false
-      }));
-    }
-  }
-
-  const resetMission = () => {
-    setMission({
-      isPlaying: false,
-      arc: selectedArc,
-      consequenceText: "",
-      combatSceneText: "",
-      statusUpdate: "",
-      choices: [],
-      isVictory: false,
-      isDefeat: false,
-      choiceHistory: [],
-      isLoading: false
-    });
-  };
 
   const notifyShare = () => {
     setSharedToast(true);
@@ -654,7 +724,7 @@ export default function App() {
                 NICHIRIN
               </h1>
               <p className="mt-4 max-w-xl text-[#e5bdba] text-sm md:text-base leading-relaxed">
-                Sign in to keep your slayer profile, story scrolls, and mission progress under your own account.
+                Sign in to keep your creation drafts and story scroll library under your own account.
               </p>
             </div>
             <div className="relative overflow-hidden border-2 border-[#5c403d] bg-black min-h-[320px] slash-corner-md">
@@ -662,7 +732,7 @@ export default function App() {
               <div className="absolute inset-0 bg-gradient-to-t from-[#131313] via-[#131313]/40 to-transparent"></div>
               <div className="absolute bottom-0 left-0 right-0 p-5 border-t border-[#5c403d] bg-black/45">
                 <p className="font-label-sm text-[10px] text-[#ffb3ad] uppercase">Active Archive</p>
-                <p className="text-white text-lg font-bold mt-1">Training, Library, Discovery, and Intel</p>
+                <p className="text-white text-lg font-bold mt-1">创作步骤与 Library</p>
               </div>
             </div>
           </section>
@@ -842,21 +912,21 @@ export default function App() {
       </header>
 
       <main id="app-main-content" className="max-w-7xl mx-auto px-4 py-6 md:py-12 min-h-[calc(100vh-140px)]">
-        {["remixTheme", "remixSettings", "remixVoice"].includes(activeTab) && (
+        {activeTab === "create" && (
           <div className="mb-8 border border-[#5c403d] bg-[#1c1b1b] p-3 md:p-4">
             <div className="grid grid-cols-3 gap-2">
               {[
-                { id: "remixTheme", label: "选择主题", icon: Palette },
-                { id: "remixSettings", label: "核心设定", icon: Settings2 },
-                { id: "remixVoice", label: "语音二创", icon: FileAudio }
+                { id: "theme", label: "选择主题", icon: Palette },
+                { id: "settings", label: "核心设定", icon: Settings2 },
+                { id: "voice", label: "语音二创", icon: FileAudio }
               ].map((step, index) => {
                 const Icon = step.icon;
-                const isActive = activeTab === step.id;
+                const isActive = createStep === step.id;
                 return (
                   <button
                     key={step.id}
                     type="button"
-                    onClick={() => setActiveTab(step.id as AppTab)}
+                    onClick={() => setCreateStep(step.id as CreateStep)}
                     className={`h-14 md:h-16 flex items-center justify-center gap-2 border text-xs md:text-sm font-bold transition-all ${
                       isActive
                         ? "bg-[#bd1020] border-[#ffb3ad] text-white"
@@ -874,7 +944,7 @@ export default function App() {
         )}
 
         {/* REMIX PAGE 1: choose comic theme */}
-        {activeTab === "remixTheme" && (
+        {activeTab === "create" && createStep === "theme" && (
           <div id="remix-theme-page" className="space-y-8 animate-fade-in">
             <section className="relative min-h-[300px] md:min-h-[380px] overflow-hidden border-2 border-[#5c403d] slash-corner-md flex items-end p-6 md:p-10">
               <img src={selectedTheme.imageUrl} alt={selectedTheme.title} className="absolute inset-0 w-full h-full object-cover opacity-50" />
@@ -893,7 +963,7 @@ export default function App() {
               </div>
             </section>
 
-            <section className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
               {COMIC_THEMES.map((theme) => (
                 <button
                   key={theme.id}
@@ -930,7 +1000,7 @@ export default function App() {
             <div className="flex justify-end">
               <button
                 type="button"
-                onClick={() => setActiveTab("remixSettings")}
+                onClick={() => setCreateStep("settings")}
                 className="px-8 py-4 bg-[#bd1020] text-white font-bold text-sm flex items-center gap-3 border-t-2 border-[#ffb3ad] hover:brightness-110"
               >
                 下一步：选择核心设定
@@ -941,7 +1011,7 @@ export default function App() {
         )}
 
         {/* REMIX PAGE 2: choose core setting */}
-        {activeTab === "remixSettings" && (
+        {activeTab === "create" && createStep === "settings" && (
           <div id="remix-settings-page" className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-fade-in">
             <aside className="lg:col-span-4 bg-[#1c1b1b] border-2 border-[#5c403d] p-5 bevel-card">
               <div className="relative h-56 overflow-hidden border border-[#5c403d] bg-black">
@@ -1020,14 +1090,14 @@ export default function App() {
                 <div className="flex gap-3">
                   <button
                     type="button"
-                    onClick={() => setActiveTab("remixTheme")}
+                    onClick={() => setCreateStep("theme")}
                     className="px-5 py-3 border border-[#5c403d] text-[#e5bdba] text-xs font-bold hover:border-[#ffb3ad]"
                   >
                     返回主题
                   </button>
                   <button
                     type="button"
-                    onClick={() => setActiveTab("remixVoice")}
+                    onClick={() => setCreateStep("voice")}
                     className="px-6 py-3 bg-[#bd1020] text-white text-xs font-bold flex items-center gap-2 border-t-2 border-[#ffb3ad] hover:brightness-110"
                   >
                     下一步：语音二创
@@ -1040,7 +1110,7 @@ export default function App() {
         )}
 
         {/* REMIX PAGE 3: voice personalization */}
-        {activeTab === "remixVoice" && (
+        {activeTab === "create" && createStep === "voice" && (
           <div id="remix-voice-page" className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-fade-in">
             <section className="lg:col-span-7 bg-[#1c1b1b] border-2 border-[#5c403d] p-6 md:p-8 bevel-card">
               <div className="flex items-center justify-between gap-4 border-b border-[#5c403d] pb-5">
@@ -1063,6 +1133,18 @@ export default function App() {
               </div>
 
               <div className="mt-6 space-y-4">
+                <div>
+                  <label className="font-label-sm text-[10px] text-[#ffb3ad] uppercase block mb-2">主角名字</label>
+                  <input
+                    type="text"
+                    value={protagonistName}
+                    onChange={(e) => setProtagonistName(e.target.value)}
+                    placeholder="例如：竈門炭治郎、或输入原创主角名"
+                    className="w-full bg-[#0e0e0e] border border-[#5c403d] px-4 py-3 text-white text-sm focus:outline-none focus:border-[#ffb3ad]"
+                  />
+                  <p className="mt-1 text-[10px] text-gray-500">留空将使用当前角色：{character.name}</p>
+                </div>
+
                 <textarea
                   rows={9}
                   value={voicePrompt}
@@ -1109,6 +1191,7 @@ export default function App() {
                 <div className="bg-black/50 border border-[#5c403d] p-4 text-xs text-[#e5bdba] leading-relaxed whitespace-pre-line min-h-44">
                   漫画主题：{selectedTheme.title}
                   {"\n"}核心设定：{selectedCoreSetting} - {selectedCoreOption}
+                  {"\n"}主角名字：{protagonistName.trim() || character.name}
                   {"\n"}用户个性化内容：{voicePrompt || "等待语音或文字输入..."}
                 </div>
               </div>
@@ -1116,409 +1199,23 @@ export default function App() {
               <div className="flex gap-3">
                 <button
                   type="button"
-                  onClick={() => setActiveTab("remixSettings")}
+                  onClick={() => setCreateStep("settings")}
                   className="flex-1 px-5 py-4 border border-[#5c403d] text-[#e5bdba] text-xs font-bold hover:border-[#ffb3ad]"
                 >
                   返回设定
                 </button>
                 <button
                   type="button"
-                  onClick={notifyShare}
-                  className="flex-1 px-5 py-4 bg-[#bd1020] text-white text-xs font-bold border-t-2 border-[#ffb3ad] hover:brightness-110"
+                  onClick={createSpinoffStory}
+                  disabled={isCreatingSpinoff}
+                  className="flex-1 px-5 py-4 bg-[#bd1020] text-white text-xs font-bold border-t-2 border-[#ffb3ad] hover:brightness-110 disabled:opacity-60 disabled:cursor-wait"
                 >
-                  保存二创草稿
+                  {isCreatingSpinoff ? "DeepSeek 创作中..." : "生成番外并保存"}
                 </button>
               </div>
             </aside>
           </div>
         )}
-        
-        {/* TAB 1: TRAINING - Character Creator */}
-        {activeTab === "training" && (
-          <div id="training-tab-view" className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-fade-in">
-            
-            {/* Left Side: Avatar & Stat Preview */}
-            <div className="lg:col-span-5 flex flex-col items-center justify-center relative bg-[#201f1f] p-6 border-2 border-[#5c403d] bevel-card">
-              <div className="absolute inset-0 ichimatsu-pattern opacity-15 pointer-events-none"></div>
-              
-              <div className="relative w-full max-w-sm aspect-[3/4] flex items-center justify-center overflow-hidden border border-[#5c403d] bg-black bg-opacity-40">
-                
-                {/* Visual Aura Frame based on breathing style */}
-                <div className={`aura-glow w-full h-full flex items-center justify-center transition-all duration-500`}>
-                  <img 
-                    src={IMAGES.silhouette} 
-                    alt="Character silhouette overlay" 
-                    className={`max-h-full object-contain mix-blend-screen transition-all ${
-                      character.breathingStyle === "Water Breathing" ? "hue-rotate-180 brightness-110" : 
-                      character.breathingStyle === "Thunder Breathing" ? "hue-rotate-60" :
-                      character.breathingStyle === "Beast Breathing" ? "contrast-125 saturate-50" : ""
-                    }`} 
-                  />
-                </div>
-
-                {/* Overlay details */}
-                <div className="absolute top-4 left-4 flex flex-col gap-1 z-10">
-                  <span className="font-label-sm text-[10px] bg-[#ffb3ad] text-[#6aa010] border border-[#68000a] text-black px-2 py-0.5 font-bold">
-                    {character.breathingStyle.toUpperCase()}
-                  </span>
-                  <span className="text-white text-md font-bold text-shadow">{character.name}</span>
-                </div>
-
-                {/* Japanese traditional label banner */}
-                <div className="absolute bottom-6 left-0 bg-[#bd1020] px-6 py-2 transform -rotate-2 border-2 border-[#ffb3ad] shadow-xl z-20">
-                  <span className="font-headline-md text-white text-lg tracking-widest">{character.japaneseTitle}</span>
-                </div>
-              </div>
-
-              {/* Dynamic Lorentz Text info */}
-              <div className="w-full mt-6 p-4 bg-[#131313] border border-[#5c403d] rounded-none">
-                <span className="font-label-sm text-[10px] text-[#ffb3ad] uppercase">Vibe Meter:</span>
-                <p className="text-[#e5bdba] text-sm italic mt-1 leading-relaxed">"{character.vibe}"</p>
-                
-                <span className="font-label-sm text-[10px] text-[#ffb3ad] uppercase block mt-3">Visual description:</span>
-                <p className="text-gray-300 text-xs mt-1 leading-relaxed">{character.appearance}</p>
-              </div>
-
-              {/* Sliders Section */}
-              <div className="w-full mt-6 space-y-4 bg-[#201f1f] p-4 border border-[#5c403d] relative">
-                <div className="space-y-1">
-                  <div className="flex justify-between items-end">
-                    <label className="font-label-sm text-[10px] uppercase text-[#ffb3ad]">Total Concentration Level</label>
-                    <span className="font-label-sm text-[10px] text-[#ffb3ad]">全集中・常中: {character.totalConcentration}%</span>
-                  </div>
-                  <div className="h-4 w-full bg-black border border-[#5c403d] relative overflow-hidden">
-                    <div className="absolute top-0 left-0 h-full bg-gradient-to-r from-[#bd1020] to-[#ffb3ad]" style={{ width: `${character.totalConcentration}%` }}></div>
-                    <div className="absolute top-0 left-0 h-full w-full breathing-bar-segment opacity-40"></div>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex justify-between items-end">
-                    <label className="font-label-sm text-[10px] uppercase text-secondary">Stamina</label>
-                    <span className="font-label-sm text-[10px] text-secondary">スタミナ: {character.stamina}%</span>
-                  </div>
-                  <div className="h-4 w-full bg-black border border-[#5c403d] relative overflow-hidden">
-                    <div className="absolute top-0 left-0 h-full bg-[#1c7ced]" style={{ width: `${character.stamina}%` }}></div>
-                    <div className="absolute top-0 left-0 h-full w-full opacity-35" style={{ backgroundImage: "linear-gradient(90deg, black 70%, transparent 70%)", backgroundSize: "10px 100%" }}></div>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex justify-between items-end">
-                    <label className="font-label-sm text-[10px] uppercase text-[#ffb957]">Technique Mastery</label>
-                    <span className="font-label-sm text-[10px] text-[#ffb957]">型習得度: {character.techniqueMastery}%</span>
-                  </div>
-                  <div className="h-4 w-full bg-black border border-[#5c403d] relative overflow-hidden">
-                    <div className="absolute top-0 left-0 h-full bg-[#ffb957]" style={{ width: `${character.techniqueMastery}%` }}></div>
-                    <div className="absolute top-0 left-0 h-full w-full opacity-35" style={{ backgroundImage: "linear-gradient(90deg, black 70%, transparent 70%)", backgroundSize: "10px 100%" }}></div>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-
-            {/* Right Side: Style Selection and Details Custom Form */}
-            <div className="lg:col-span-7 flex flex-col space-y-6">
-              
-              {/* Manual inputs cards */}
-              <div className="bg-[#1c1b1b] border-2 border-[#5c403d] p-6 bevel-card">
-                <h3 className="font-headline-md text-[#ffb3ad] text-xl border-l-4 border-[#bd1020] pl-3 mb-4 uppercase">
-                  RE-FORGE CHARACTER BIOGRAPHY
-                </h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="font-label-sm text-[10px] text-gray-300 block mb-1">CHOOSE WARRIOR NAME</label>
-                    <input 
-                      type="text" 
-                      value={charNameInput}
-                      onChange={(e) => setCharNameInput(e.target.value)}
-                      className="w-full bg-[#0e0e0e] border border-[#5c403d] px-3 py-2 text-white focus:outline-none focus:border-[#ffb3ad] font-label-sm"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="font-label-sm text-[10px] text-gray-300 block mb-1">PERSONAL TRAITS (INFLUENCES IA STORY)</label>
-                    <textarea 
-                      rows={2}
-                      value={customTraitsInput}
-                      onChange={(e) => setCustomTraitsInput(e.target.value)}
-                      placeholder="Insert personality notes, favorite meals or unique habits of your samurai slayer"
-                      className="w-full bg-[#0e0e0e] border border-[#5c403d] px-3 py-2 text-white text-sm focus:outline-none focus:border-[#ffb3ad] leading-relaxed"
-                    />
-                  </div>
-
-                  {/* Manual stat tweaking buttons to let user feel full ownership */}
-                  <div className="grid grid-cols-3 gap-2 pt-2">
-                    <button 
-                      onClick={() => setCharacter(p => ({ ...p, totalConcentration: Math.min(100, p.totalConcentration + 5) }))} 
-                      className="px-2 py-2 bg-[#2a2a2a] hover:bg-[#353534] border border-[#5c403d] text-xs font-label-sm font-bold block"
-                    >
-                      + CONCENTRATION
-                    </button>
-                    <button 
-                      onClick={() => setCharacter(p => ({ ...p, stamina: Math.min(100, p.stamina + 5) }))} 
-                      className="px-2 py-2 bg-[#2a2a2a] hover:bg-[#353534] border border-[#5c403d] text-xs font-label-sm font-bold block"
-                    >
-                      + STAMINA
-                    </button>
-                    <button 
-                      onClick={() => setCharacter(p => ({ ...p, techniqueMastery: Math.min(100, p.techniqueMastery + 5) }))} 
-                      className="px-2 py-2 bg-[#2a2a2a] hover:bg-[#353534] border border-[#5c403d] text-xs font-label-sm font-bold block"
-                    >
-                      + MASTERY
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Title Header */}
-              <div>
-                <h2 className="font-headline-xl text-3xl md:text-5xl text-[#ffdad7] tracking-tighter italic leading-none">
-                  SELECT YOUR BREATHING STYLE
-                </h2>
-                <p className="font-headline-md text-md text-[#e5bdba] mt-2 uppercase flex items-center gap-2">
-                  <span className="w-2 h-2 bg-[#bd1020]"></span>
-                  全集中の呼吸を選択
-                </p>
-              </div>
-
-              {/* Breathing Grid Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {BREATHING_STYLES.map((style) => (
-                  <div 
-                    key={style.id}
-                    id={`style-card-${style.id}`}
-                    onClick={() => updateStatsForBreathing(style.id)}
-                    className={`group relative overflow-hidden border-2 bevel-card p-5 cursor-pointer transition-all duration-300 ${
-                      character.breathingStyle === style.id ? "border-[#bd1020] bg-[#bd1020] bg-opacity-10 border-l-[10px]" : "border-[#5c403d] bg-[#2a2a2a] hover:border-white"
-                    }`}
-                  >
-                    <div className="absolute top-0 right-0 w-16 h-16 opacity-10">
-                      <div className={`w-full h-full ${style.wavesColor}`} style={{ clipPath: "polygon(100% 0, 0 0, 100% 100%)" }}></div>
-                    </div>
-                    
-                    <div className="relative z-10">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className={`material-symbols-outlined text-3xl ${style.textColor}`}>
-                          {style.icon}
-                        </span>
-                        {character.breathingStyle === style.id && (
-                          <span className="bg-[#bd1020] text-white px-2 py-0.5 rounded-none text-[8px] font-bold tracking-widest leading-none">
-                            ✓ ACTIVE
-                          </span>
-                        )}
-                      </div>
-                      
-                      <h3 className={`font-headline-md text-lg text-white`}>{style.id}</h3>
-                      <p className={`font-label-sm text-[11px] text-[#e5bdba] mb-3`}>{style.japanese}</p>
-                      
-                      <div className="h-[1px] w-full bg-[#5c403d] mb-3 opacity-50"></div>
-                      <p className="font-body-md text-xs text-gray-300 italic leading-relaxed">{style.tags}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Dynamic generated lore backstory blocks */}
-              <div className="bg-[#201f1f] border border-[#5c403d] p-6 text-sm">
-                <div className="flex items-center gap-2 border-b border-[#5c403d] pb-2 mb-3">
-                  <BookOpen className="w-5 h-5 text-[#ffb3ad]" />
-                  <span className="font-label-sm text-[10px] text-[#ffb3ad] font-bold block">CHARACTER CHRONICLES & LORE BOOK</span>
-                </div>
-                <p className="text-[#e5bdba] leading-relaxed text-xs text-justify italic mb-4">
-                  {character.backstory}
-                </p>
-
-                <span className="font-label-sm text-[10px] text-[#ffb3ad] block mb-2">BREATHING TECHNIQUES MASTERED:</span>
-                <div className="space-y-3">
-                  {character.techniques.map((tech, idx) => (
-                    <div key={idx} className="bg-[#131313] p-3 border-l-2 border-[#bd1020]">
-                      <div className="flex justify-between">
-                        <span className="font-bold text-xs text-white">{tech.name}</span>
-                        <span className="font-label-sm text-[10px] text-[#ffb3ad]">{tech.kanji}</span>
-                      </div>
-                      <p className="text-gray-400 text-[11px] mt-1 leading-relaxed">{tech.description}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* AWAKEN ACTION BUTTON */}
-              <div className="flex flex-col md:flex-row items-center justify-between gap-4 pt-4 border-t border-[#5c403d]">
-                <p className="font-label-sm text-xs text-[#ffb3ad] opacity-80 animate-pulse">
-                  PREPARE FOR THE SELECTION EXAM...
-                </p>
-
-                <button 
-                  id="awaken-blade-trigger"
-                  disabled={isGeneratingChar}
-                  onClick={generateCharacterAI}
-                  className="w-full md:w-auto px-10 py-5 bg-[#bd1020] hover:brightness-110 active:scale-95 transition-all outline-none font-bold relative group border-t-2 border-[#ffcd9a] select-none"
-                >
-                  <div className="flex items-center gap-3 justify-center text-white">
-                    {isGeneratingChar ? (
-                      <>
-                        <RotateCcw className="w-5 h-5 animate-spin" />
-                        <span className="font-headline-md tracking-wider text-sm font-black">FORGING VIA GEMINI INTEL...</span>
-                      </>
-                    ) : (
-                      <>
-                        <div className="flex flex-col text-right leading-none">
-                          <span className="font-headline-md text-sm leading-none font-black block">AWAKEN YOUR BLADE</span>
-                          <span className="font-headline-md text-[10px] italic opacity-80 block mt-1">刀を振るえ</span>
-                        </div>
-                        <span className="material-symbols-outlined text-2xl">swords</span>
-                      </>
-                    )}
-                  </div>
-                </button>
-              </div>
-
-            </div>
-          </div>
-        )}
-
-        {/* TAB 2: DISCOVERY - Chronicles & Archives */}
-        {activeTab === "discovery" && (
-          <div id="discovery-tab-view" className="space-y-8 animate-fade-in">
-            {/* Hero Section: Featured Chapter Banner */}
-            <section className="relative w-full min-h-[420px] bg-gradient-to-t from-black via-transparent to-transparent flex items-end overflow-hidden slash-corner-md border-2 border-[#5c403d] p-6 md:p-12 shadow-2xl">
-              <div className="absolute inset-0 z-0 select-none">
-                <img src={IMAGES.heroFlame} alt="Slayer Hashira of Flame art" className="w-full h-full object-cover opacity-50 scale-102 transition-opacity duration-700" />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#131313] via-[#131313]/50 to-transparent"></div>
-                <div className="absolute inset-0 asanoha-overlay opacity-25"></div>
-              </div>
-
-              <div className="relative z-10 max-w-2xl">
-                <div className="inline-block px-3 py-1 bg-[#bd1020] text-white font-label-sm text-[10px] uppercase font-bold tracking-widest mb-3">
-                  {activeScroll.japaneseTitle}
-                </div>
-                <h2 className="font-headline-xl text-3xl md:text-5xl text-white mb-3">
-                  {activeScroll.title}
-                </h2>
-                <p className="font-body-lg text-sm md:text-md text-[#e5bdba] mb-6 leading-relaxed">
-                  {activeScroll.summary}
-                </p>
-
-                <button 
-                  onClick={() => {
-                    setActiveTab("library");
-                  }}
-                  className="bg-[#bd1020] hover:bg-opacity-95 text-white shadow-xl px-6 py-4 font-headline-md text-xs flex items-center gap-3 active:scale-95 transition-all select-none border-t-2 border-white/20"
-                >
-                  <span>READ SCROLL CANVAS</span>
-                  <span className="material-symbols-outlined text-sm">auto_stories</span>
-                </button>
-              </div>
-            </section>
-
-            {/* AI Custom Chapter Generator Block */}
-            <div className="bg-[#1c1b1b] border-2 border-[#5c403d] p-6 bevel-card">
-              <h3 className="font-headline-md text-[#ffb3ad] text-lg mb-2 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-[#ffb3ad] animate-pulse" />
-                INVENT A NEW STORY SCROLL VIA GEMINI
-              </h3>
-              <p className="text-gray-400 text-xs mb-4">
-                Input any custom theme or event (e.g., "Thunder meets Flame", "The Rain Demon’s Ambush") to compile a poetry scrolls.
-              </p>
-              <div className="flex flex-col md:flex-row gap-4">
-                <input 
-                  type="text"
-                  placeholder="Thematic scroll Title (e.g. 幻の第十二刀)"
-                  value={customScrollTitle}
-                  onChange={(e) => setCustomScrollTitle(e.target.value)}
-                  className="flex-1 bg-[#0e0e0e] border border-[#5c403d] px-3 py-2 text-white text-xs font-label-sm focus:outline-none"
-                />
-                <input 
-                  type="text"
-                  placeholder="A short story summary..."
-                  value={customScrollSummary}
-                  onChange={(e) => setCustomScrollSummary(e.target.value)}
-                  className="flex-[2] bg-[#0e0e0e] border border-[#5c403d] px-3 py-2 text-white text-xs font-label-sm focus:outline-none"
-                />
-                <button 
-                  disabled={isGeneratingScroll || !customScrollTitle}
-                  onClick={generateCustomScroll}
-                  className="bg-[#bd1020] hover:brightness-110 px-6 py-2 text-xs font-bold text-white select-none whitespace-nowrap"
-                >
-                  {isGeneratingScroll ? "COMPILES..." : "WRITE SCROLL"}
-                </button>
-              </div>
-            </div>
-
-            {/* Categories Bento Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {scrollPresets.slice(0, 3).map((preset, index) => (
-                <div 
-                  key={preset.id}
-                  onClick={() => setActiveScroll(preset)}
-                  className={`border-2 p-6 transition-all duration-300 bevel-card cursor-pointer group ${
-                    activeScroll.id === preset.id ? "border-[#bd1020] bg-[#bd1020] bg-opacity-5" : "border-[#5c403d] bg-[#1c1b1b] hover:border-[#ffb3ad]"
-                  }`}
-                >
-                  <div className="flex justify-between items-start mb-6">
-                    <span className="material-symbols-outlined text-[#ffb3ad] text-3xl">
-                      {index === 0 ? "fitness_center" : index === 1 ? "visibility" : "history_edu"}
-                    </span>
-                    <span className="font-label-sm text-xs opacity-50">0{index+1}</span>
-                  </div>
-                  <h3 className="font-headline-md text-lg text-white mb-2 group-hover:text-[#ffb3ad] transition-colors">
-                    {preset.title}
-                  </h3>
-                  <p className="text-gray-400 text-xs leading-relaxed line-clamp-3">
-                    {preset.summary}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            {/* Trending Section */}
-            <div className="space-y-6">
-              <div className="flex items-center justify-between border-b-4 border-[#bd1020] pb-2">
-                <h3 className="font-headline-md text-xl text-[#ffb3ad]">注目の技と物語</h3>
-                <span className="font-label-sm text-[10px] text-[#e5bdba] opacity-70">TRENDING CHRONICLES</span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {TRENDING_TECHNIQUES.map((tech, idx) => (
-                  <div 
-                    key={idx}
-                    className="flex gap-4 p-4 bg-[#201f1f] border-l-4 border-[#bd1020] bevel-card group hover:border-[#ffb3ad] transition-all"
-                  >
-                    <div className="w-20 h-20 bg-black overflow-hidden flex-shrink-0 border border-gray-800">
-                      <img src={tech.imageUrl} alt={tech.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                    </div>
-                    <div className="flex flex-col justify-center">
-                      <span className="font-label-sm text-[10px] text-secondary mb-1">{tech.style}</span>
-                      <h4 className="font-headline-md text-md text-white">{tech.title}</h4>
-                      <p className="text-xs text-[#e5bdba] leading-relaxed mt-1 line-clamp-2">{tech.desc}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Meter */}
-            <div className="p-6 bg-[#201f1f] border-2 border-[#5c403d] slash-corner-md">
-              <div className="flex justify-between items-end mb-4">
-                <div>
-                  <h5 className="font-label-sm text-[10px] text-[#ffb3ad] mb-1">全集中・常中</h5>
-                  <p className="font-headline-md text-md text-white">STAMINA / 集中力</p>
-                </div>
-                <span className="font-label-sm text-sm text-[#ffb3ad] font-bold">85%</span>
-              </div>
-              <div className="h-4 bg-[#131313] flex gap-1 overflow-hidden">
-                {[...Array(8)].map((_, i) => (
-                  <div key={i} className="h-full flex-1 bg-[#bd1020] animate-pulse" style={{ animationDelay: `${i * 150}ms` }}></div>
-                ))}
-                <div className="h-full flex-1 bg-[#bd1020] opacity-40"></div>
-                <div className="h-full flex-1 bg-transparent"></div>
-              </div>
-            </div>
-
-          </div>
-        )}
-
         {/* TAB 3: LIBRARY - Scroll Reader & Crow Message Forum */}
         {activeTab === "library" && (
           <div id="library-tab-view" className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-fade-in">
@@ -1537,8 +1234,8 @@ export default function App() {
               <div className="space-y-2">
                 <button 
                   onClick={() => {
-                    const idx = scrollPresets.findIndex(s => s.id === activeScroll.id);
-                    if (idx > 0) setActiveScroll(scrollPresets[idx - 1]);
+                    const idx = libraryScrolls.findIndex(s => s.id === activeScroll.id);
+                    if (idx > 0) selectLibraryScroll(libraryScrolls[idx - 1]);
                   }}
                   className="w-full py-3 bg-[#bd1020] text-white text-xs font-bold italic bevel-metallic uppercase flex items-center justify-center gap-2 hover:brightness-115 active:scale-98 transition-all"
                 >
@@ -1547,8 +1244,8 @@ export default function App() {
                 </button>
                 <button 
                   onClick={() => {
-                    const idx = scrollPresets.findIndex(s => s.id === activeScroll.id);
-                    if (idx < scrollPresets.length - 1) setActiveScroll(scrollPresets[idx + 1]);
+                    const idx = libraryScrolls.findIndex(s => s.id === activeScroll.id);
+                    if (idx < libraryScrolls.length - 1) selectLibraryScroll(libraryScrolls[idx + 1]);
                   }}
                   className="w-full py-3 bg-[#2a2a2a] text-white text-xs font-bold border border-[#5c403d] flex items-center justify-center gap-2 hover:bg-neutral-800 active:scale-98 transition-all"
                 >
@@ -1577,17 +1274,34 @@ export default function App() {
                   <div className="absolute inset-0 bg-gradient-to-t from-background/40 to-transparent pointer-events-none"></div>
                 </div>
 
-                {/* Parchment traditional vertical scrolling section */}
-                <div className="parchment-texture p-6 md:p-12 border-x-8 border-[#353534] relative">
-                  <div className="text-black leading-relaxed text-justify h-[380px] md:h-[480px] mx-auto opacity-95 [writing-mode:vertical-rl] whitespace-pre-line font-japanese overflow-x-auto select-all scrollbar-thin">
-                    {activeScroll.japaneseStoryText}
+                {/* Story display: dedicated light purple area for user-created stories, parchment for presets */}
+                {activeCreation ? (
+                  <div className="p-6 md:p-10 border-x-8 border-[#7c3aed] relative bg-[#f3e8ff]">
+                    <div className="absolute top-4 left-4 z-10">
+                      <span className="bg-[#7c3aed] text-white px-3 py-1 text-[10px] font-bold uppercase tracking-wider">用户创作故事</span>
+                    </div>
+                    <div className="relative text-[#1a120b] leading-loose text-justify text-base md:text-lg whitespace-pre-line font-japanese select-all pt-10 [text-shadow:0_1px_0_rgba(255,255,255,0.4)]">
+                      {activeScroll.正文}
+                    </div>
+                    
+                    {/* Decorative stamp overlay */}
+                    <div className="absolute bottom-4 right-4 text-[#7c3aed] opacity-65 font-black text-2xl border-4 border-[#7c3aed] px-3 rotate-12 z-10">
+                      用户番外
+                    </div>
                   </div>
-                  
-                  {/* Decorative stamp overlay */}
-                  <div className="absolute bottom-4 right-4 text-[#68000a] opacity-65 font-black text-2xl border-4 border-[#68000a] px-3 rotate-12">
-                    鬼殺隊
+                ) : (
+                  <div className="parchment-texture p-6 md:p-12 border-x-8 border-[#353534] relative">
+                    <div className="absolute inset-0 bg-[#f4e4bc]/92"></div>
+                    <div className="relative text-[#1a120b] leading-relaxed text-justify h-[380px] md:h-[480px] mx-auto opacity-95 [writing-mode:vertical-rl] whitespace-pre-line font-japanese overflow-x-auto select-all scrollbar-thin [text-shadow:0_1px_0_rgba(255,255,255,0.3)]">
+                      {activeScroll.正文}
+                    </div>
+                    
+                    {/* Decorative stamp overlay */}
+                    <div className="absolute bottom-4 right-4 text-[#68000a] opacity-65 font-black text-2xl border-4 border-[#68000a] px-3 rotate-12 z-10">
+                      鬼殺隊
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="relative overflow-hidden">
                   <img src={activeScroll.imageUrls[1] || IMAGES.mangaEye} alt="manga panel 2" className="w-full grayscale hover:grayscale-0 transition-all duration-700" />
@@ -1613,18 +1327,18 @@ export default function App() {
               {/* Scroll translations detail */}
               <div className="bg-[#201f1f] border border-[#5c403d] p-4 text-xs">
                 <span className="font-label-sm text-[10px] text-[#ffb3ad] uppercase block mb-1">Corps Translation Transcript:</span>
-                <p className="text-[#e5bdba] leading-relaxed">{activeScroll.englishSummary}</p>
+                <p className="text-[#e5bdba] leading-relaxed">{activeScroll.简介}</p>
               </div>
 
               {/* Action items */}
               <div className="pt-6 flex flex-col md:flex-row gap-4">
                 <button 
                   onClick={() => {
-                    const idx = scrollPresets.findIndex(s => s.id === activeScroll.id);
-                    if (idx < scrollPresets.length - 1) {
-                      setActiveScroll(scrollPresets[idx + 1]);
+                    const idx = libraryScrolls.findIndex(s => s.id === activeScroll.id);
+                    if (idx < libraryScrolls.length - 1) {
+                      selectLibraryScroll(libraryScrolls[idx + 1]);
                     } else {
-                      setActiveScroll(scrollPresets[0]);
+                      selectLibraryScroll(libraryScrolls[0]);
                     }
                   }}
                   className="flex-1 py-4 bg-[#bd1020] hover:brightness-110 text-white font-headline-md text-xs italic bevel-metallic slash-corner transition-all duration-200"
@@ -1725,345 +1439,127 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Mission stats intellect info */}
-              <div className="bg-[#1c1b1b] p-6 space-y-4 border border-[#5c403d]">
-                <h3 className="font-label-sm text-[10px] text-[#ffb3ad] uppercase">MISSION INTEL DATA</h3>
-                <div className="flex justify-between items-center py-2 border-b border-gray-800">
-                  <span className="text-xs text-gray-400">Total Views</span>
-                  <span className="font-label-sm text-xs text-white">1,240,892</span>
+              <div className="bg-[#1c1b1b] p-6 space-y-5 border border-[#5c403d]">
+                <h3 className="font-label-sm text-[10px] text-[#ffb3ad] uppercase">创作 JSON</h3>
+
+                {activeCreation ? (
+                  <pre className="max-h-72 overflow-auto bg-black/60 border border-[#5c403d] p-3 text-[10px] leading-relaxed text-[#e5bdba] whitespace-pre-wrap">
+                    {JSON.stringify(activeCreation.settings, null, 2)}
+                  </pre>
+                ) : (
+                  <div className="bg-black/40 border border-dashed border-[#5c403d] p-4 text-xs text-gray-400 leading-relaxed">
+                    选择一个用户生成番外后，这里会展示保存到 JSON 文件里的主题、设定和情节。
+                  </div>
+                )}
+
+                <div className="border-t border-[#5c403d] pt-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="font-label-sm text-[10px] text-[#ffb3ad] uppercase">已生成番外</span>
+                    <span className="text-[10px] text-gray-500">{creations.length}</span>
+                  </div>
+
+                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    {creations.length === 0 ? (
+                      <p className="text-xs text-gray-500 leading-relaxed">
+                        还没有番外。回到创作页完成三步后，点击“生成番外并保存”。
+                      </p>
+                    ) : (
+                      creations.map((creation) => (
+                        <button
+                          key={creation.id}
+                          type="button"
+                          onClick={() => {
+                            setActiveCreationId(creation.id);
+                            setActiveScroll(creationToScroll(creation));
+                          }}
+                          className={`w-full text-left p-3 border transition-all ${
+                            activeCreationId === creation.id
+                              ? "bg-[#bd1020]/20 border-[#ffb3ad]"
+                              : "bg-black/40 border-[#5c403d] hover:border-[#ffb3ad]"
+                          }`}
+                        >
+                          <p className="text-xs font-bold text-white line-clamp-1">{creation.story.title}</p>
+                          <p className="mt-1 text-[10px] text-[#e5bdba] line-clamp-1">
+                            {creation.settings.themeTitle} / {creation.settings.coreOption}
+                          </p>
+                        </button>
+                      ))
+                    )}
+                  </div>
                 </div>
-                <div className="flex justify-between items-center py-2 border-b border-gray-800">
-                  <span className="text-xs text-gray-400">Flame Meter</span>
-                  <span className="font-label-sm text-xs text-[#bd1020] font-bold">88% 🔥</span>
-                </div>
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-xs text-gray-400">Scroll Rank</span>
-                  <span className="font-label-sm text-xs text-secondary font-bold">#3 TOP</span>
+
+                {/* Continue story section */}
+                <div className="border-t border-[#5c403d] pt-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-label-sm text-[10px] text-[#ffb3ad] uppercase flex items-center gap-2">
+                      <PenLine className="w-4 h-4" />
+                      续写后续
+                    </h3>
+                    {activeCreation && (
+                      <span className="text-[10px] text-gray-500">{activeCreation.story.title}</span>
+                    )}
+                  </div>
+
+                  {!activeCreation ? (
+                    <p className="text-xs text-gray-500 leading-relaxed">
+                      从上方列表选择一个用户生成番外后，可以在这里输入后续主题并续写故事。
+                    </p>
+                  ) : !showContinuationInput ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowContinuationInput(true)}
+                      className="w-full py-3 bg-[#7c3aed] hover:bg-[#6d28d9] text-white text-xs font-bold flex items-center justify-center gap-2 border-t-2 border-[#c4b5fd] transition-all"
+                    >
+                      <PenLine className="w-4 h-4" />
+                      为这个故事续写后续
+                    </button>
+                  ) : (
+                    <div className="space-y-3">
+                      <textarea
+                        rows={5}
+                        value={continuationPrompt}
+                        onChange={(e) => setContinuationPrompt(e.target.value)}
+                        placeholder="例如：主角在战斗后遇到了失散多年的师妹，师妹却告诉他一个惊人的秘密……"
+                        className="w-full bg-[#0e0e0e] border border-[#5c403d] px-3 py-3 text-white text-xs leading-relaxed focus:outline-none focus:border-[#7c3aed]"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowContinuationInput(false);
+                            setContinuationPrompt("");
+                          }}
+                          className="flex-1 py-3 border border-[#5c403d] text-[#e5bdba] text-xs font-bold hover:border-[#ffb3ad]"
+                        >
+                          取消
+                        </button>
+                        <button
+                          type="button"
+                          onClick={continueStory}
+                          disabled={isContinuing}
+                          className="flex-1 py-3 bg-[#7c3aed] hover:bg-[#6d28d9] disabled:opacity-60 text-white text-xs font-bold border-t-2 border-[#c4b5fd] flex items-center justify-center gap-2"
+                        >
+                          {isContinuing ? (
+                            <>
+                              <RotateCcw className="w-4 h-4 animate-spin" />
+                              续写中…
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-4 h-4" />
+                              生成后续
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
             </aside>
           </div>
         )}
-
-        {/* TAB 4: INTEL - Mission Settings & Interactive Text Simulator */}
-        {activeTab === "intel" && (
-          <div id="intel-tab-view" className="space-y-8 animate-fade-in text-justify">
-            
-            {/* Mission Hero banner header */}
-            <div className="mb-8 border-l-8 border-[#bd1020] pl-6 select-none">
-              <h2 className="font-headline-xl text-4xl md:text-5xl text-white uppercase tracking-tighter">
-                FORGE YOUR DESTINY
-              </h2>
-              <p className="font-headline-md text-[#e5bdba] text-lg italic mt-1">
-                運命を切り拓け
-              </p>
-            </div>
-
-            {/* Simulated interactive text Game Board frame */}
-            {mission.isPlaying ? (
-              <div id="active-mission-room" className="bg-[#201f1f] border-4 border-[#bd1020] p-6 md:p-12 bevel-card relative overflow-hidden animate-shake">
-                <div className="absolute inset-0 ichimatsu-pattern opacity-10 pointer-events-none"></div>
-                
-                {/* Visual Header matching selected arc */}
-                <div className="flex justify-between items-center border-b border-[#5c403d] pb-4 mb-6 relative z-10">
-                  <div className="flex items-center gap-3">
-                    <span className="bg-[#bd1020] text-white text-[10px] px-3 py-1 font-label-sm uppercase font-bold tracking-widest leading-none">
-                      {atmosphere.toUpperCase()} COMBAT
-                    </span>
-                    <h3 className="font-headline-md text-white text-lg md:text-xl">
-                      {ARCS.find(a => a.id === mission.arc)?.title}
-                    </h3>
-                  </div>
-
-                  <span className="font-label-sm text-xs text-[#ffb3ad]">
-                    Choices turn count: {mission.choiceHistory.length}
-                  </span>
-                </div>
-
-                {mission.isLoading ? (
-                  <div className="h-48 flex flex-col items-center justify-center relative z-10">
-                    <RotateCcw className="w-12 h-12 text-[#bd1020] animate-spin mb-4" />
-                    <p className="font-label-sm text-xs text-gray-300">GEMINI NARRATING SCENARIOS...</p>
-                  </div>
-                ) : (
-                  <div className="space-y-8 relative z-10">
-                    
-                    {/* Story prompt block */}
-                    <div className="space-y-4">
-                      <p className="text-[#ffb3ad] font-label-sm text-xs leading-relaxed opacity-75 uppercase">
-                        Consequence situation:
-                      </p>
-                      <p className="text-white text-md tracking-wide leading-relaxed pl-4 border-l-4 border-gray-600 bg-black bg-opacity-40 py-3 pr-2">
-                        {mission.consequenceText}
-                      </p>
-
-                      <p className="text-secondary font-label-sm text-xs tracking-wide uppercase mt-6 opacity-75">
-                        Combat Threat Detail:
-                      </p>
-                      <p className="text-gray-200 text-sm leading-relaxed italic pr-2 font-japanese font-medium">
-                        {mission.combatSceneText}
-                      </p>
-                    </div>
-
-                    {/* Threat / victory state message callout banner */}
-                    <div className="bg-[#131313] p-4 flex items-center justify-between border-l-4 border-[#ffb3ad]">
-                      <span className="font-label-sm text-xs text-[#ffb3ad] uppercase">Status Check:</span>
-                      <span className="font-label-sm text-xs text-white uppercase font-bold tracking-wide">
-                        {mission.statusUpdate}
-                      </span>
-                    </div>
-
-                    {/* CHOICE SELECT OPERATIONS list */}
-                    {!mission.isVictory && !mission.isDefeat && (
-                      <div className="space-y-3 pt-4">
-                        <span className="font-label-sm text-[10px] text-gray-300 block mb-2 uppercase">
-                          DECIDE YOUR NEXT BLADE POSITION OPERATION:
-                        </span>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {mission.choices.map((choice) => (
-                            <button 
-                              key={choice.id}
-                              onClick={() => startMissionGame(choice.text)}
-                              className="bg-[#2a2a2a] hover:bg-[#bd1020] hover:bg-opacity-20 text-left border border-[#5c403d] hover:border-[#bd1020] p-4 text-xs tracking-wide transition-all outline-none rounded-none text-white leading-relaxed"
-                            >
-                              <div className="flex gap-3">
-                                <ChevronRight className="w-4 h-4 text-[#ffb3ad] flex-shrink-0" />
-                                <span>{choice.text}</span>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Victory / defeat screens trigger and reset */}
-                    {(mission.isVictory || mission.isDefeat) && (
-                      <div className="text-center py-6 space-y-4 border-t border-[#5c403d] animate-fade-in">
-                        <div className="flex justify-center">
-                          {mission.isVictory ? (
-                            <CheckCircle className="w-16 h-16 text-[#00e676] animate-bounce" />
-                          ) : (
-                            <AlertCircle className="w-16 h-16 text-[#bd1020] animate-bounce" />
-                          )}
-                        </div>
-                        <h4 className="font-headline-xl text-3xl text-white uppercase font-black">
-                          {mission.isVictory ? "MISSION COMPLETE ✓" : "BLADE BROKEN / DEFEAT"}
-                        </h4>
-                        <p className="text-sm text-[#e5bdba] max-w-md mx-auto">
-                          {mission.isVictory ? `Sensational performance, Slayer ${character.name}! You successfully resolved the threat and defended the realm.` : "The supernatural darkness overwhelmed your stamina block. Recover and plan a sharper strike."}
-                        </p>
-                        
-                        <button 
-                          onClick={resetMission}
-                          className="px-10 py-4 bg-[#bd1020] text-white font-bold text-xs uppercase hover:bg-opacity-90 outline-none transition-all duration-300"
-                        >
-                          RETURN TO SHADOW PLANNING
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Quit/Abort operational line */}
-                    {!mission.isVictory && !mission.isDefeat && (
-                      <div className="pt-4 border-t border-[#5c403d] flex justify-end">
-                        <button 
-                          onClick={resetMission}
-                          className="text-gray-400 hover:text-[#bd1020] font-label-sm text-[10px] uppercase transition-all"
-                        >
-                          [ ABORT MISSION ACTIONS ]
-                        </button>
-                      </div>
-                    )}
-
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div id="mission-planning-board" className="grid grid-cols-1 md:grid-cols-12 gap-6">
-                
-                {/* Arc options columns */}
-                <section className="md:col-span-8 flex flex-col gap-6">
-                  <h3 className="font-label-sm text-[10px] text-[#ffb3ad] uppercase flex items-center gap-2">
-                    <span className="material-symbols-outlined text-sm">swords</span>
-                    SELECT ARC / 篇の選択
-                  </h3>
-
-                  {ARCS.map((arc) => (
-                    <div 
-                      key={arc.id}
-                      onClick={() => {
-                        if (arc.id !== "mugen_train") {
-                          setSelectedArc(arc.id);
-                        }
-                      }}
-                      className={`group relative border-2 p-5 overflow-hidden transition-all duration-300 rounded-none bevel-card cursor-pointer ${
-                        arc.id === "mugen_train" ? "opacity-50 cursor-not-allowed" : ""
-                      } ${
-                        selectedArc === arc.id && arc.id !== "mugen_train" ? "border-[#bd1020] bg-[#bd1020]/10 border-l-[12px]" : "border-[#5c403d] bg-[#1c1b1b] hover:border-[#ffb3ad]"
-                      }`}
-                    >
-                      <div className="absolute inset-0 parchment-texture opacity-5 pointer-events-none"></div>
-                      
-                      <div className="flex flex-col md:flex-row gap-5 relative z-10">
-                        <div className="w-full md:w-44 h-28 bg-[#000] overflow-hidden flex-shrink-0 border border-neutral-800">
-                          <img 
-                            src={arc.imageUrl} 
-                            alt={arc.title} 
-                            className={`w-full h-full object-cover transition-all duration-500 ${
-                              selectedArc === arc.id ? "grayscale-0 scale-102" : "grayscale opacity-75 group-hover:grayscale-0 group-hover:opacity-100"
-                            }`} 
-                          />
-                        </div>
-
-                        <div className="flex-1">
-                          <div className="flex justify-between items-start flex-wrap gap-2">
-                            <div>
-                              <h4 className="font-headline-md text-lg text-white group-hover:text-[#ffb3ad] transition-all">
-                                {arc.title}
-                              </h4>
-                              <p className="font-label-sm text-[10px] text-[#ffb3ad] mt-1 italic">{arc.japaneseTitle}</p>
-                            </div>
-
-                            <span className={`px-2.5 py-1 text-[9px] font-bold font-label-sm leading-none uppercase ${
-                              arc.id === "mugen_train" ? "bg-amber-800/80 text-white" : "bg-[#2a2a2a] text-secondary"
-                            }`}>
-                              {arc.unlockedAt}
-                            </span>
-                          </div>
-
-                          <p className="text-gray-300 text-xs mt-3 leading-relaxed">
-                            {arc.description}
-                          </p>
-
-                          <div className="flex gap-2 mt-4">
-                            <span className="px-2 py-0.5 bg-black border border-gray-800 text-gray-400 font-label-sm text-[8px]">
-                              {arc.tag1}
-                            </span>
-                            <span className="px-2 py-0.5 bg-black border border-gray-800 text-gray-400 font-label-sm text-[8px]">
-                              {arc.tag2}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </section>
-
-                {/* Atmosphere side settings panel column */}
-                <aside className="md:col-span-4 flex flex-col gap-6">
-                  
-                  {/* Atmospheric switches */}
-                  <div className="bg-[#1c1b1b] border-2 border-[#5c403d] p-5 bevel-card shadow-xl">
-                    <h3 className="font-label-sm text-[10px] text-[#ffb3ad] uppercase mb-4 flex items-center gap-2">
-                      <Sun className="w-4 h-4 text-[#ffb3ad]" />
-                      ATMOSPHERE / 雰囲気
-                    </h3>
-
-                    <div className="flex flex-col gap-3">
-                      {/* Daylight */}
-                      <label className={`group flex items-center justify-between p-3 bg-black border cursor-pointer transition-all ${
-                        atmosphere === "daylight" ? "border-amber-500 bg-amber-500/5" : "border-gray-800 hover:border-[#ffb3ad]"
-                      }`}>
-                        <div className="flex items-center gap-3">
-                          <Sun className="w-5 h-5 text-amber-500" />
-                          <div>
-                            <span className="text-white text-xs font-bold font-label-sm block">Daylight (Training)</span>
-                            <span className="text-[9px] text-gray-400 font-label-sm">昼間 (修行)</span>
-                          </div>
-                        </div>
-                        <input 
-                          type="radio" 
-                          name="atmosphere_radio" 
-                          checked={atmosphere === "daylight"}
-                          onChange={() => setAtmosphere("daylight")}
-                          className="w-4 h-4 text-[#bd1020] bg-transparent border-[#5c403d] focus:ring-0 cursor-pointer"
-                        />
-                      </label>
-
-                      {/* Nocturnal */}
-                      <label className={`group flex items-center justify-between p-3 bg-black border cursor-pointer transition-all ${
-                        atmosphere === "nocturnal" ? "border-[#bd1020] bg-[#bd1020]/5" : "border-gray-800 hover:border-[#ffb3ad]"
-                      }`}>
-                        <div className="flex items-center gap-3">
-                          <Moon className="w-5 h-5 text-indigo-400" />
-                          <div>
-                            <span className="text-white text-xs font-bold font-label-sm block">Nocturnal (Battle)</span>
-                            <span className="text-[9px] text-gray-400 font-label-sm">夜間 (戦闘)</span>
-                          </div>
-                        </div>
-                        <input 
-                          type="radio" 
-                          name="atmosphere_radio" 
-                          checked={atmosphere === "nocturnal"}
-                          onChange={() => setAtmosphere("nocturnal")}
-                          className="w-4 h-4 text-[#bd1020] bg-transparent border-[#5c403d] focus:ring-0 cursor-pointer"
-                        />
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Breathing sliders tweak focus */}
-                  <div className="bg-[#1c1b1b] border-2 border-[#5c403d] p-5 bevel-card shadow-xl">
-                    <h3 className="font-label-sm text-[10px] text-[#ffb3ad] uppercase mb-4 flex items-center gap-2">
-                      <Activity className="w-4 h-4 text-[#ffb3ad]" />
-                      BREATHING FOCUS / 全集中
-                    </h3>
-
-                    <div className="space-y-3">
-                      <div className="flex gap-1 h-8 bg-black border border-gray-800 p-0.5">
-                        {[...Array(8)].map((_, idx) => {
-                          const barLimit = (idx + 1) * 12.5;
-                          const active = breathingFocusLevel >= barLimit;
-                          return (
-                            <div 
-                              key={idx} 
-                              className={`flex-1 transition-all ${
-                                active ? "bg-[#bd1020] animate-pulse" : "bg-neutral-900 border border-neutral-800"
-                              }`}
-                            ></div>
-                          );
-                        })}
-                      </div>
-
-                      <div className="flex justify-between text-[9px] text-gray-400 font-label-sm">
-                        <span>CURRENT: {breathingFocusLevel}%</span>
-                        <span>PEAK: 100%</span>
-                      </div>
-
-                      <input 
-                        type="range" 
-                        min="20" 
-                        max="100" 
-                        value={breathingFocusLevel}
-                        onChange={(e) => setBreathingFocusLevel(Number(e.target.value))}
-                        className="w-full accent-[#bd1020]"
-                      />
-                    </div>
-                  </div>
-
-                  {/* START ACTION MODULE */}
-                  <div className="mt-4 pt-4 border-t border-[#5c403d]">
-                    <button 
-                      onClick={() => startMissionGame()}
-                      className="w-full h-16 bg-[#bd1020] hover:brightness-110 active:scale-95 transition-all text-white font-headline-md text-xs tracking-widest font-black flex items-center justify-center gap-3 border-t-2 border-[#ffb3ad] shadow-2xl"
-                    >
-                      <span>START RECRUIT MISSION</span>
-                      <ChevronRight className="w-5 h-5 animate-ping" />
-                    </button>
-                    <p className="text-center text-xs text-gray-500 font-label-sm italic mt-3">
-                      任務を開始せよ
-                    </p>
-                  </div>
-
-                </aside>
-
-              </div>
-            )}
-
-          </div>
-        )}
-
       </main>
 
       {/* Kasugai Crow Chat Sheet Drawers (Slide over modal overlay) */}
@@ -2159,102 +1655,28 @@ export default function App() {
           </div>
         </div>
       )}
-
-      {/* Floating Action sword Button shown in screen captures */}
-      <button 
-        id="dock-floater-button"
-        title="Quick action dashboard triggers"
-        onClick={() => {
-          if (activeTab === "intel") {
-            setSelectedArc("natagumo");
-            setAtmosphere("nocturnal");
-            startMissionGame();
-          } else {
-            setChatOpen(true);
-          }
-        }}
-        className="fixed bottom-24 right-4 md:bottom-8 md:right-8 w-16 h-16 rounded-none bg-gradient-to-br from-[#bd1020] to-[#131313] text-[#ffcd9a] shadow-2xl flex items-center justify-center border-2 border-[#ffb3ad] slash-corner active:scale-95 transition-transform z-40 select-none animate-pulse-slow"
-      >
-        <span className="material-symbols-outlined text-3xl font-bold">swords</span>
-      </button>
-
       {/* Persistent Bottom Layout Navigation drawer */}
       <nav id="nichirin-bottom-tabs" className="fixed bottom-0 left-0 w-full z-40 flex justify-around items-stretch h-20 bg-[#1c1b1b] border-t-4 border-[#bd1020] shadow-2xl select-none">
         <button 
-          id="tab-btn-remix-theme"
-          onClick={() => setActiveTab("remixTheme")}
+          id="tab-btn-create"
+          onClick={() => setActiveTab("create")}
           className={`flex-1 flex flex-col items-center justify-center p-2 transition-all outline-none ${
-            activeTab === "remixTheme" ? "bg-[#bd1020] text-white font-bold" : "text-gray-400 hover:text-white"
+            activeTab === "create" ? "bg-[#bd1020] text-white font-bold" : "text-gray-400 hover:text-white"
           }`}
         >
-          <Palette className="w-5 h-5 mb-1" />
-          <span className="font-label-sm text-[9px] uppercase tracking-wider">主题</span>
-        </button>
-
-        <button 
-          id="tab-btn-remix-settings"
-          onClick={() => setActiveTab("remixSettings")}
-          className={`flex-1 flex flex-col items-center justify-center p-2 transition-all outline-none border-l border-[#5c403d] ${
-            activeTab === "remixSettings" ? "bg-[#bd1020] text-white font-bold" : "text-gray-400 hover:text-white"
-          }`}
-        >
-          <Settings2 className="w-5 h-5 mb-1" />
-          <span className="font-label-sm text-[9px] uppercase tracking-wider">设定</span>
-        </button>
-
-        <button 
-          id="tab-btn-remix-voice"
-          onClick={() => setActiveTab("remixVoice")}
-          className={`flex-1 flex flex-col items-center justify-center p-2 transition-all outline-none border-l border-[#5c403d] ${
-            activeTab === "remixVoice" ? "bg-[#bd1020] text-white font-bold" : "text-gray-400 hover:text-white"
-          }`}
-        >
-          <Mic className="w-5 h-5 mb-1" />
-          <span className="font-label-sm text-[9px] uppercase tracking-wider">语音</span>
-        </button>
-        
-        <button 
-          id="tab-btn-discovery"
-          onClick={() => setActiveTab("discovery")}
-          className={`flex-1 flex-col items-center justify-center p-2 transition-all outline-none hidden md:flex border-l border-[#5c403d] ${
-            activeTab === "discovery" ? "bg-[#bd1020] text-white font-bold" : "text-gray-400 hover:text-white"
-          }`}
-        >
-          <Compass className="w-5 h-5 mb-1" />
-          <span className="font-label-sm text-[9px] uppercase tracking-wider">Discovery</span>
-        </button>
-
-        <button 
-          id="tab-btn-training"
-          onClick={() => setActiveTab("training")}
-          className={`flex-1 flex-col items-center justify-center p-2 transition-all outline-none hidden md:flex ${
-            activeTab === "training" ? "bg-[#bd1020] text-white font-bold border-x border-[#5c403d]" : "text-gray-400 hover:text-white border-x border-[#5c403d]"
-          }`}
-        >
-          <Flame className="w-5 h-5 mb-1 text-[#ffff57] animate-pulse" />
-          <span className="font-label-sm text-[9px] uppercase tracking-wider">Training</span>
+          <PenTool className="w-5 h-5 mb-1" />
+          <span className="font-label-sm text-[9px] uppercase tracking-wider">创作</span>
         </button>
 
         <button 
           id="tab-btn-library"
           onClick={() => setActiveTab("library")}
-          className={`flex-1 flex-col items-center justify-center p-2 transition-all outline-none hidden md:flex ${
-            activeTab === "library" ? "bg-[#bd1020] text-white font-bold border-r border-[#5c403d]" : "text-gray-400 hover:text-white border-r border-[#5c403d]"
+          className={`flex-1 flex flex-col items-center justify-center p-2 transition-all outline-none border-l border-[#5c403d] ${
+            activeTab === "library" ? "bg-[#bd1020] text-white font-bold" : "text-gray-400 hover:text-white"
           }`}
         >
           <BookOpen className="w-5 h-5 mb-1" />
           <span className="font-label-sm text-[9px] uppercase tracking-wider">Library</span>
-        </button>
-
-        <button 
-          id="tab-btn-intel"
-          onClick={() => setActiveTab("intel")}
-          className={`flex-1 flex-col items-center justify-center p-2 transition-all outline-none hidden md:flex ${
-            activeTab === "intel" ? "bg-[#bd1020] text-white font-bold" : "text-gray-400 hover:text-white"
-          }`}
-        >
-          <Activity className="w-5 h-5 mb-1" />
-          <span className="font-label-sm text-[9px] uppercase tracking-wider">Intel</span>
         </button>
 
       </nav>

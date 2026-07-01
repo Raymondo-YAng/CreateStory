@@ -98,12 +98,12 @@ export const SCROLL_PRESETS: ScrollChapter[] = [
     title: "煉獄の意志",
     japaneseTitle: "柱・特選記録",
     summary: "炎柱・煉獄杏寿郎の最後の一戦。その熱き魂が刻まれた未公開の記録。無限列車での激闘を追体験せよ。",
-    japaneseStoryText: `その時、空気が変わった。少年の呼吸は、氷のように冷たく、それでいて太陽のように熱い。一振りの刀が、闇を切り裂き、運命を塗り替えていく！
+    正文: `那一刻，空气变了。少年的呼吸如冰般寒冷，又如太阳般炽热。一刀挥出，撕裂黑暗，改写命运！
 
-鬼の絶叫が夜に響き渡り、散りゆく花弁のように、過去の記憶が溢れ出した。
+鬼的惨叫在夜空中回荡，如同纷飞的花瓣，往昔的记忆满溢而出。
 
-炎の如き真っ赤な闘志をみなぎらせて、煉獄杏寿郎は立ち上がった。「俺は俺の責務を全うする！ここにいる者は誰も死なせない！」`,
-    englishSummary: "The final stand of Kyojuro Rengoku, the Flame Hashira. Re-live the fierce battle on the Mugen Train where his red-hot soul shines brightest.",
+炼狱杏寿郎浑身燃烧着火焰般的鲜红斗志，站起身来。「我会履行我的职责！这里的人，一个都不会死！」`,
+    简介: "炎柱炼狱杏寿郎的最后一战。重温无限列车上那炽热灵魂最为闪耀的激斗。",
     imageUrls: [IMAGES.heroFlame, IMAGES.mangaClash, IMAGES.mangaEye, IMAGES.mangaTorii]
   },
   {
@@ -113,12 +113,12 @@ export const SCROLL_PRESETS: ScrollChapter[] = [
     title: "全集中・呼吸法",
     japaneseTitle: "剣士の起源",
     summary: "基礎から究極の奥義まで、全流派の源流を紐解く。呼吸の秘密を身につけ、刀身を覚醒させよ。",
-    japaneseStoryText: `肺胞の隅々にまで酸素を送り込み、心音を最大に響かせる。
+    正文: `将氧气送至肺泡的每一个角落，让心跳响彻极限。
 
-これこそが「全集中の呼吸」也。血管が膨張し、骨が軋むほどの過酷な訓練が始まりし時、背後に宿るは太古より相伝されし属性の化身なり。 
+这正是「全集中呼吸」。当严苛到血管膨胀、骨骼作响的训练开始之时，背后寄宿的，便是自太古相传下来的属性化身。
 
-水よ、炎よ、雷よ！流派の始まりが示すは五感の限界を超越せし刀。`,
-    englishSummary: "A comprehensive scroll cataloging the origins of all breathing techniques, starting from simple inhalation routines to the core elements.",
+水啊、炎啊、雷啊！流派的开端所昭示的，是超越五感极限的刀。`,
+    简介: "全面记录所有呼吸法起源的卷轴，从简单的吸气法门到核心元素。",
     imageUrls: [IMAGES.arcTraining, IMAGES.mangaClash, IMAGES.mangaEye]
   },
   {
@@ -128,12 +128,12 @@ export const SCROLL_PRESETS: ScrollChapter[] = [
     title: "十二鬼月・上弦",
     japaneseTitle: "宿敵の脅威",
     summary: "Upper Moons: 千年の時を生きる最凶の鬼たち。その悲しき過去と圧倒的な血鬼術の異能をあばく。",
-    japaneseStoryText: `千年の血を分け与えられし、最凶の怪物たち。
+    正文: `被赐予千年之血，最凶恶的怪物们。
 
-彼らの瞳に刻まれる宿命の数字。「上弦」とはすなわち、数多の柱を屠って来し悪夢。 
+刻在他们眼中的宿命数字。「上弦」即意味着，屠戮了无数柱的噩梦。
 
-怨嗟の声、引き裂かれた血の繋がりに、鬼の秘められたる人間の悲しみが潜む。`,
-    englishSummary: "The chronicle of the Upper Moons. Decipher the history, tragedies, and devastating Blood Demon Arts of Muzan's strongest twelve combatants.",
+怨嗟之声、被撕裂的血缘联系之中，潜藏着鬼所隐藏的、属于人类的悲哀。`,
+    简介: "上弦之月的编年史。解读无惨最强十二鬼的历史、悲剧与毁灭性的血鬼术。",
     imageUrls: [IMAGES.arcNatagumo, IMAGES.mangaEye]
   }
 ];
