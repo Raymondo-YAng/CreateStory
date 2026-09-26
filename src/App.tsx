@@ -69,7 +69,7 @@ type StoredCreation = {
   };
 };
 
-const AUTH_STORAGE_KEY = "nichirin.currentUser";
+const AUTH_STORAGE_KEY = "veridia.currentUser";
 
 const COMIC_THEMES = [
   {
@@ -82,9 +82,9 @@ const COMIC_THEMES = [
   },
   {
     id: "one-piece",
-    title: "航海王",
+    title: "海贼王",
     subtitle: "恶魔果实、霸气、海贼团与伟大航路",
-    imageUrl: IMAGES.mangaTorii,
+    imageUrl: IMAGES.onePieceHero,
     accent: "from-[#1c7ced] to-[#ffb957]",
     settings: ["恶魔果实", "霸气类型", "船员定位", "岛屿生态", "悬赏身份"]
   },
@@ -92,7 +92,7 @@ const COMIC_THEMES = [
     id: "jujutsu",
     title: "咒术回战",
     subtitle: "术式、领域展开、咒具与高专任务",
-    imageUrl: IMAGES.mangaEye,
+    imageUrl: IMAGES.jujutsuHero,
     accent: "from-[#4f46e5] to-[#bd1020]",
     settings: ["天生术式", "领域展开", "咒具", "束缚条件", "任务等级"]
   },
@@ -100,7 +100,7 @@ const COMIC_THEMES = [
     id: "naruto",
     title: "火影忍者",
     subtitle: "查克拉、忍术、血继限界与忍者任务",
-    imageUrl: IMAGES.mangaClash,
+    imageUrl: IMAGES.narutoHero,
     accent: "from-[#f97316] to-[#1d4ed8]",
     settings: ["查克拉属性", "忍术类型", "忍者阶级", "血继限界", "任务地点"]
   },
@@ -116,7 +116,7 @@ const COMIC_THEMES = [
     id: "my-hero",
     title: "我的英雄学院",
     subtitle: "个性、英雄学校、职业英雄与救援训练",
-    imageUrl: IMAGES.thunderKatana,
+    imageUrl: IMAGES.myHeroHero,
     accent: "from-[#16a34a] to-[#ef4444]",
     settings: ["个性类型", "英雄学校", "职业目标", "战斗定位", "训练场景"]
   },
@@ -124,7 +124,7 @@ const COMIC_THEMES = [
     id: "bleach",
     title: "死神",
     subtitle: "斩魄刀、鬼道、虚化与尸魂界",
-    imageUrl: IMAGES.waterWaves,
+    imageUrl: IMAGES.bleachHero,
     accent: "from-[#0f172a] to-[#7c3aed]",
     settings: ["斩魄刀类型", "鬼道", "死神阶级", "虚化状态", "任务地点"]
   }
@@ -213,11 +213,7 @@ export default function App() {
   const [isContinuing, setIsContinuing] = useState(false);
 
   // Crow Messages Comment and Chat states
-  const [comments, setComments] = useState([
-    { username: "KINOE_USER", text: "この描写は本当に鳥肌が立つ。特に呼吸の表現が最高だ。", icon: "military_tech", color: "text-primary" },
-    { username: "Mizunoto_44", text: "展開が早すぎて追いつけない！次が楽しみすぎる。", icon: "stars", color: "text-secondary" },
-    { username: "Slayer_X", text: "最後のパネルの意味深な表情、伏線かな？", icon: "person", color: "text-outline" }
-  ]);
+  const [comments, setComments] = useState<{ username: string; text: string; icon: string; color: string }[]>([]);
   const [crowCommentInput, setCrowCommentInput] = useState("");
   
   // Bot panel state
@@ -268,6 +264,21 @@ export default function App() {
   function creationToScroll(creation: StoredCreation): ScrollChapter {
     const creationTheme = COMIC_THEMES.find((theme) => theme.id === creation.settings.themeId) || selectedTheme;
 
+    const themeImageUrls =
+      creationTheme.id === "demon-slayer"
+        ? [IMAGES.heroFlame, IMAGES.mangaClash, IMAGES.arcNatagumo]
+        : creationTheme.id === "jujutsu"
+        ? [IMAGES.jujutsuHero, IMAGES.jujutsuGojo, IMAGES.jujutsuGroup]
+        : creationTheme.id === "naruto"
+        ? [IMAGES.narutoHero, IMAGES.narutoShippuden, IMAGES.narutoViz]
+        : creationTheme.id === "one-piece"
+        ? [IMAGES.onePieceHero, IMAGES.onePieceCrew, IMAGES.onePiecePoster]
+        : creationTheme.id === "my-hero"
+        ? [IMAGES.myHeroHero, IMAGES.myHeroClass, IMAGES.myHeroDeku]
+        : creationTheme.id === "bleach"
+        ? [IMAGES.bleachHero, IMAGES.bleachScene1, IMAGES.bleachScene2]
+        : [creationTheme.imageUrl, IMAGES.mangaClash, IMAGES.mangaTorii];
+
     return {
       id: creation.id,
       chapterNumber: creation.story.chapterNumber,
@@ -277,11 +288,7 @@ export default function App() {
       summary: `${creation.settings.themeTitle} / ${creation.settings.coreSetting} / ${creation.settings.coreOption}`,
       正文: creation.story.正文 || (creation.story as any).japaneseStoryText || "",
       简介: creation.story.简介 || (creation.story as any).englishSummary || "",
-      imageUrls: [
-        creationTheme.imageUrl,
-        IMAGES.mangaClash,
-        IMAGES.mangaTorii
-      ]
+      imageUrls: themeImageUrls
     };
   }
 
@@ -721,14 +728,14 @@ export default function App() {
             </div>
             <div>
               <h1 className="font-headline-xl text-5xl md:text-7xl text-[#ffdad7] italic leading-none tracking-tight">
-                NICHIRIN
+                VERIDIA
               </h1>
               <p className="mt-4 max-w-xl text-[#e5bdba] text-sm md:text-base leading-relaxed">
                 Sign in to keep your creation drafts and story scroll library under your own account.
               </p>
             </div>
             <div className="relative overflow-hidden border-2 border-[#5c403d] bg-black min-h-[320px] slash-corner-md">
-              <img src={IMAGES.heroFlame} alt="Nichirin flame mission artwork" className="absolute inset-0 w-full h-full object-cover opacity-55" />
+              <img src={IMAGES.heroFlame} alt="Veridia flame mission artwork" className="absolute inset-0 w-full h-full object-cover opacity-55" />
               <div className="absolute inset-0 bg-gradient-to-t from-[#131313] via-[#131313]/40 to-transparent"></div>
               <div className="absolute bottom-0 left-0 right-0 p-5 border-t border-[#5c403d] bg-black/45">
                 <p className="font-label-sm text-[10px] text-[#ffb3ad] uppercase">Active Archive</p>
@@ -846,7 +853,7 @@ export default function App() {
   }
 
   return (
-    <div id="nichirin-app-root" className="min-h-screen bg-[#131313] text-[#e5e2e1] font-body-md overflow-x-hidden pb-24 md:pb-8 selection:bg-[#ffb3ad] selection:text-[#68000a]">
+    <div id="veridia-app-root" className="min-h-screen bg-[#131313] text-[#e5e2e1] font-body-md overflow-x-hidden pb-24 md:pb-8 selection:bg-[#ffb3ad] selection:text-[#68000a]">
       
       {/* Dynamic API Call Warning alert, only pops if there's constructive info */}
       {apiError && (
@@ -872,7 +879,7 @@ export default function App() {
         <div className="flex items-center gap-4">
           <span className="material-symbols-outlined text-[#ffb3ad] text-2xl hidden md:inline">swords</span>
           <h1 className="font-headline-lg text-2xl md:text-3xl font-black text-[#ffb3ad] tracking-tighter italic select-none">
-            NICHIRIN
+            VERIDIA
           </h1>
         </div>
         
@@ -1310,15 +1317,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Focus bar spacer */}
-                <div className="bg-[#2a2a2a] p-6 flex flex-col items-center gap-4 border-y-2 border-[#bd1020]">
-                  <span className="material-symbols-outlined text-[#bd1020] text-5xl">flare</span>
-                  <p className="font-headline-md text-lg text-[#ffb3ad] italic">全集中。</p>
-                  <div className="w-full h-1 bg-gray-700 relative overflow-hidden">
-                    <div className="absolute top-0 left-0 h-full w-2/3 bg-[#bd1020] nichirin-glow"></div>
-                  </div>
-                </div>
-
                 <div className="relative">
                   <img src={activeScroll.imageUrls[2] || IMAGES.mangaTorii} alt="manga panel 3" className="w-full grayscale hover:grayscale-0 transition-all duration-700" />
                 </div>
@@ -1363,7 +1361,7 @@ export default function App() {
                 </h4>
                 <div className="flex gap-4">
                   <div className="flex-1 h-12 bg-black border border-gray-800 flex items-center px-4 text-gray-300 font-label-sm text-xs select-all">
-                    https://nichirin.app/archives/{activeScroll.id}
+                    https://veridia.app/archives/{activeScroll.id}
                   </div>
                   <button 
                     onClick={notifyShare}
@@ -1443,9 +1441,15 @@ export default function App() {
                 <h3 className="font-label-sm text-[10px] text-[#ffb3ad] uppercase">创作 JSON</h3>
 
                 {activeCreation ? (
-                  <pre className="max-h-72 overflow-auto bg-black/60 border border-[#5c403d] p-3 text-[10px] leading-relaxed text-[#e5bdba] whitespace-pre-wrap">
-                    {JSON.stringify(activeCreation.settings, null, 2)}
-                  </pre>
+                  <div className="bg-[#0e0e0e] border border-[#5c403d] overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2 border-b border-[#5c403d] bg-black/40">
+                      <span className="font-label-sm text-[10px] text-[#ffb3ad] uppercase tracking-wider">settings.json</span>
+                      <span className="font-label-sm text-[9px] text-gray-500">{activeCreation.id.slice(0, 8)}</span>
+                    </div>
+                    <pre className="max-h-72 overflow-auto p-4 text-[11px] leading-relaxed text-[#e5bdba] whitespace-pre-wrap font-mono scrollbar-thin">
+                      {JSON.stringify(activeCreation.settings, null, 2)}
+                    </pre>
+                  </div>
                 ) : (
                   <div className="bg-black/40 border border-dashed border-[#5c403d] p-4 text-xs text-gray-400 leading-relaxed">
                     选择一个用户生成番外后，这里会展示保存到 JSON 文件里的主题、设定和情节。
@@ -1656,7 +1660,7 @@ export default function App() {
         </div>
       )}
       {/* Persistent Bottom Layout Navigation drawer */}
-      <nav id="nichirin-bottom-tabs" className="fixed bottom-0 left-0 w-full z-40 flex justify-around items-stretch h-20 bg-[#1c1b1b] border-t-4 border-[#bd1020] shadow-2xl select-none">
+      <nav id="veridia-bottom-tabs" className="fixed bottom-0 left-0 w-full z-40 flex justify-around items-stretch h-20 bg-[#1c1b1b] border-t-4 border-[#bd1020] shadow-2xl select-none">
         <button 
           id="tab-btn-create"
           onClick={() => setActiveTab("create")}
